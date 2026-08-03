@@ -416,7 +416,23 @@ git commit -m "Add GeometricKeyframeFilter with baseline/angle filtering"
 - Consumes: 없음
 - Produces: `OpenCVWrapper` (Objective-C 클래스) — `+ (NSString *)openCVVersion;`. 이후 태스크들이 여기에 메서드를 계속 추가한다.
 
-- [ ] **Step 1: CocoaPods 설치**
+> **실제 진행 시 변경됨 (2026-08-04): CocoaPods → xcframework 직접 빌드**
+>
+> OpenCV 공식 iOS 배포본(`opencv-4.14.0-ios-framework.zip`)은 `.xcframework`가 아니라 **fat framework**이고, 아키텍처가 `armv7 armv7s x86_64 arm64`다. 여기서 `x86_64`는 인텔 맥 시뮬레이터용이라 **Apple Silicon 시뮬레이터에서 쓸 수 없다** — fat framework는 기기 arm64와 시뮬레이터 arm64를 구분할 수 없기 때문이고, 바로 그 한계 때문에 `.xcframework` 포맷이 존재한다. CocoaPods의 `pod 'OpenCV'`도 같은 바이너리를 쓰므로 문제가 동일하다.
+>
+> 그래서 **소스에서 직접 xcframework를 빌드**하는 방식으로 전환했다(`scripts/setup-opencv.sh`, Apple Silicon 기준 약 5분). 결과물은 `ios-arm64` + `ios-arm64-simulator` 두 슬라이스를 갖춰 **실기기 없이 시뮬레이터에서 OpenCV 의존 테스트를 돌릴 수 있다** — Task 5/8/9의 TDD가 기기 대기 없이 진행 가능해진다.
+>
+> 빌드 시 주의점 두 가지:
+> - 빌드 스크립트가 `git branch --show-current`로 브랜치명을 읽어서, tarball로 받은 소스(`.git` 없음)에서는 exit 128로 죽는다 → `git init`으로 우회
+> - 마지막 "Copying documentation" 단계에서 `docs` 디렉토리가 없어 `FileNotFoundError`로 죽지만, 그 시점엔 xcframework가 이미 완성돼 있다 → 종료 코드 대신 **산출물 존재 여부로 성공을 판정**해야 한다
+>
+> 산출물 47MB는 커밋하지 않고 `.gitignore`에 넣었다. `Frameworks/opencv2.xcframework`로 설치되며, `pbxproj`에는 링크 + `FRAMEWORK_SEARCH_PATHS` + `SWIFT_OBJC_BRIDGING_HEADER`를 배선했다. **브릿징 헤더는 앱 타겟과 테스트 타겟 양쪽에 지정해야 한다** — 타겟별 설정이라 앱에만 걸면 테스트에서 `OpenCVWrapper`를 못 찾는다.
+>
+> OpenCV 헤더가 뿜는 `-Wquoted-include-in-framework-header` / `-Wdocumentation` 경고는 서드파티 노이즈라 `CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER=NO`, `CLANG_WARN_DOCUMENTATION_COMMENTS=NO`로 억제했다(우리 코드의 진짜 경고가 묻히지 않도록).
+>
+> 아래 Step 1~5(CocoaPods 관련)는 **수행하지 않았고**, Step 6부터가 실제로 적용됐다.
+
+- [~] **Step 1: CocoaPods 설치** *(미수행 — xcframework 방식으로 대체)*
 
 ```bash
 brew install cocoapods
@@ -424,7 +440,7 @@ brew install cocoapods
 
 Expected: 설치 완료 메시지. (이미 설치돼 있으면 `cocoapods 1.x.x already installed` 류의 메시지)
 
-- [ ] **Step 2: Podfile 생성 및 편집**
+- [~] **Step 2: Podfile 생성 및 편집** *(미수행)*
 
 ```bash
 cd /Users/seochanho/repositories/splatforge
@@ -448,7 +464,7 @@ end
 
 `inherit! :search_paths`가 중요하다 — 이게 없으면 테스트 타겟에서 `OpenCVWrapper`를 쓸 때 "OpenCV 헤더를 못 찾는다"는 링커 에러가 난다(테스트 타겟은 기본적으로 앱 타겟의 Pod를 상속받지 않음).
 
-- [ ] **Step 3: pod install 실행**
+- [~] **Step 3: pod install 실행** *(미수행 — 대신 `scripts/setup-opencv.sh`)*
 
 ```bash
 pod install
@@ -460,19 +476,19 @@ Expected: `Pod installation complete!` 메시지와 함께 `SplatForge.xcworkspa
 
 > 만약 `pod install`이 `OpenCV` pod 관련 에러로 실패하면(오래된 pod가 최신 Xcode/iOS SDK와 호환성 문제를 일으킬 수 있음), OpenCV 공식 사이트(opencv.org/releases)에서 `opencv2.xcframework`를 직접 다운로드해서 Xcode 프로젝트에 드래그 앤 드롭하는 방식으로 전환한다 — 이 경우 Podfile/CocoaPods 관련 스텝은 건너뛰고 Step 4부터 이어서 진행.
 
-- [ ] **Step 4: Objective-C++ 래퍼 클래스 생성**
+- [~] **Step 4: Objective-C++ 래퍼 클래스 생성** *(Xcode GUI 불필요 — 파일시스템 동기화 그룹이라 디스크에 만들면 자동 포함)*
 
 Xcode(workspace)에서: File > New > File > Cocoa Touch Class. 이름 `OpenCVWrapper`, Subclass of `NSObject`, Language `Objective-C`. 저장 위치는 `SplatForge/` 폴더.
 
 생성 직후 Xcode가 팝업으로 "Would you like to configure an Objective-C bridging header?"라고 물으면 **Create Bridging Header** 선택 — 이게 `SplatForge-Bridging-Header.h`를 자동 생성해준다.
 
-- [ ] **Step 5: .m을 .mm으로 변경**
+- [~] **Step 5: .m을 .mm으로 변경** *(해당 없음 — 처음부터 .mm으로 생성)*
 
 프로젝트 네비게이터에서 `OpenCVWrapper.m`을 선택 → 우클릭 > Rename → `OpenCVWrapper.mm`으로 변경.
 
 이유: OpenCV는 C++로 작성돼 있어서 C++ 문법을 쓰려면 파일이 Objective-C++(`.mm`)이어야 한다. 순수 Objective-C(`.m`)에서는 C++ 헤더를 include할 수 없다.
 
-- [ ] **Step 6: OpenCVWrapper.h 작성 (Swift에 노출될 순수 Objective-C 인터페이스)**
+- [x] **Step 6: OpenCVWrapper.h 작성 (Swift에 노출될 순수 Objective-C 인터페이스)**
 
 `SplatForge/OpenCVWrapper.h`:
 
@@ -492,7 +508,7 @@ NS_ASSUME_NONNULL_END
 
 이 헤더에는 C++ 타입을 절대 노출하지 않는다 — Swift가 직접 보는 파일이라, C++ 타입이 섞이면 Swift에서 import가 깨진다. C++는 항상 `.mm` 구현 파일 안에만 숨긴다.
 
-- [ ] **Step 7: OpenCVWrapper.mm 작성**
+- [x] **Step 7: OpenCVWrapper.mm 작성**
 
 `SplatForge/OpenCVWrapper.mm`:
 
@@ -509,7 +525,7 @@ NS_ASSUME_NONNULL_END
 @end
 ```
 
-- [ ] **Step 8: 브릿징 헤더에 import 추가**
+- [x] **Step 8: 브릿징 헤더에 import 추가** *(+ 앱/테스트 타겟 양쪽에 `SWIFT_OBJC_BRIDGING_HEADER` 설정)*
 
 `SplatForge/SplatForge-Bridging-Header.h` (Xcode가 생성한 파일, 내용이 비어있을 것):
 
@@ -517,7 +533,7 @@ NS_ASSUME_NONNULL_END
 #import "OpenCVWrapper.h"
 ```
 
-- [ ] **Step 9: 스모크 테스트 작성**
+- [x] **Step 9: 스모크 테스트 작성**
 
 `SplatForgeTests/OpenCVBridgeTests.swift`:
 
@@ -533,13 +549,13 @@ final class OpenCVBridgeTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 10: 테스트 실행 및 확인**
+- [x] **Step 10: 테스트 실행 및 확인** *(PASS — OpenCV 4.14.0, 경고 0건)*
 
 Cmd+U.
 
 Expected: PASS. 만약 "No such module 'opencv2'"류의 에러가 나면 Step 2의 `inherit! :search_paths`가 빠졌거나 `.xcworkspace`가 아니라 `.xcodeproj`를 열고 있는 게 원인일 가능성이 높다.
 
-- [ ] **Step 11: 커밋**
+- [x] **Step 11: 커밋** *(e669688)*
 
 ```bash
 cat >> .gitignore << 'EOF'
