@@ -1,0 +1,15 @@
+# Xcode
+xcuserdata/
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+
+# CocoaPods (Task 4에서 도입)
+Pods/
+
+# macOS
+.DS_Store
+
+# 에디터
+*.swp
+*.swo
