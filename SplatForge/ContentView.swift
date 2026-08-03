@@ -8,13 +8,14 @@
 import SwiftUI
 import ARKit
 
-// ARSCNView는 UIKit 뷰라서 SwiftUI에서 쓰려면 UIViewRepresentable로 감싸야 한다.
-// 지금은 동작 확인용 임시 세션만 돌린다 — 실제 캡처 로직은 Task 6/7에서 CaptureSession으로 교체한다.
-struct ARCameraPreview: UIViewRepresentable {
+/// ARSCNView는 UIKit 뷰라서 SwiftUI에서 쓰려면 UIViewRepresentable로 감싸야 한다.
+/// 세션을 스스로 만들지 않고 외부에서 주입받는다 — 세션의 생명주기는 CaptureSession이 소유한다.
+struct ARContainerView: UIViewRepresentable {
+    let session: ARSession
+
     func makeUIView(context: Context) -> ARSCNView {
         let view = ARSCNView()
-        let configuration = ARWorldTrackingConfiguration()
-        view.session.run(configuration)
+        view.session = session
         return view
     }
 
@@ -22,9 +23,12 @@ struct ARCameraPreview: UIViewRepresentable {
 }
 
 struct ContentView: View {
+    @StateObject private var captureSession = CaptureSession()
+
     var body: some View {
-        ARCameraPreview()
+        ARContainerView(session: captureSession.session)
             .ignoresSafeArea()
+            .onAppear { captureSession.start() }
     }
 }
 
