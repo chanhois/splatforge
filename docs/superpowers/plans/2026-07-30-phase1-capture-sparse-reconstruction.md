@@ -17,6 +17,12 @@
 - LiDAR 관련 API(`sceneDepth`, `smoothedSceneDepth`, `ARMeshAnchor`/`.sceneReconstruction`) 사용 금지 — iPhone 17 기본형은 LiDAR 없음
 - OpenCV는 CocoaPods(`pod 'OpenCV'`)로 설치하고 Objective-C++(`.mm`) 브릿지를 통해서만 사용 — Swift에서 C++ 헤더 직접 import 안 함
 - 오프라인 batch 처리 — 캡처 중에는 pose 스트림만 저장하고, 재구성 연산은 캡처 종료 후 별도 단계에서 실행
+- **테스트 실행은 반드시 `-only-testing:SplatForgeTests`를 붙일 것** — 스킴이 자동 생성이라 그냥 `xcodebuild test`를 돌리면 Xcode가 만든 `SplatForgeUITests`(화면 방향/외관 조합마다 앱을 실행하는 `testLaunch()`)까지 딸려 실행돼 시뮬레이터가 여러 개 뜨고 훨씬 느려진다:
+  ```
+  xcodebuild test -project SplatForge.xcodeproj -scheme SplatForge \
+    -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:SplatForgeTests
+  ```
+- 이 프로젝트는 `PBXFileSystemSynchronizedRootGroup`(Xcode 16+)을 쓰므로, **디스크에 `.swift` 파일을 만들면 자동으로 타겟에 포함된다** — `project.pbxproj`를 수동 편집할 필요 없음
 - 이 프로젝트는 학습 목적을 겸하므로, 모든 코드 스텝에 왜 이렇게 하는지 설명을 포함한다 (특히 ARKit 좌표계, simd 행렬 규약처럼 처음 보면 헷갈리는 부분)
 
 ---
@@ -177,7 +183,7 @@ git commit -m "Add Xcode project with minimal ARKit camera preview"
   - `struct PosedFrame { let imagePath: URL; let pose: simd_float4x4; let intrinsics: simd_float3x3; let timestamp: TimeInterval }`
   - `class CaptureSession: NSObject, ObservableObject, ARSessionDelegate` — `var session: ARSession`(읽기 전용 프로퍼티로 노출), `@Published var keyframeCount: Int`, `func start()`, `func stop()`. Task 6에서 실시간 필터링 로직이 추가된다.
 
-- [ ] **Step 1: PosedFrame 정의**
+- [x] **Step 1: PosedFrame 정의**
 
 `SplatForge/Capture/PosedFrame.swift`:
 
@@ -196,7 +202,7 @@ struct PosedFrame {
 }
 ```
 
-- [ ] **Step 2: CaptureSession 스켈레톤 작성 (포즈 로깅만)**
+- [x] **Step 2: CaptureSession 스켈레톤 작성 (포즈 로깅만)**
 
 `SplatForge/Capture/CaptureSession.swift`:
 
@@ -235,7 +241,7 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
 }
 ```
 
-- [ ] **Step 3: ContentView에 연결해서 실기기로 확인**
+- [x] **Step 3: ContentView에 연결해서 실기기로 확인** *(코드 작성 + 시뮬레이터 빌드 통과. 실기기 확인은 Step 4에서)*
 
 `SplatForge/ContentView.swift`의 `ARCameraPreview`가 자체 세션을 만들던 걸, `CaptureSession`이 소유한 세션을 쓰도록 바꾼다:
 
@@ -270,13 +276,13 @@ struct ContentView: View {
 }
 ```
 
-- [ ] **Step 4: 실기기 실행으로 pose 로그 확인**
+- [ ] **Step 4: 실기기 실행으로 pose 로그 확인** *(대기 중 — 개발자 모드 필요)*
 
 Cmd+R로 실행 → Xcode 콘솔을 보면서 iPhone을 좌우로 움직여본다.
 
 Expected: `frame #30 tracking=normal pos=(0.01, -0.02, 0.03)` 같은 로그가 계속 찍히고, 폰을 움직이면 `pos` 값이 그에 맞게 변한다. (이게 이 태스크의 "테스트"다 — ARSession 자체는 실기기 없이 단위 테스트하기 어렵다.)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋** *(6925937)*
 
 ```bash
 git add SplatForge/Capture/PosedFrame.swift SplatForge/Capture/CaptureSession.swift SplatForge/ContentView.swift
@@ -295,7 +301,7 @@ git commit -m "Add PosedFrame struct and CaptureSession pose logging skeleton"
 - Consumes: `simd_float4x4`, `simd_float3`(순수 simd 타입만, PosedFrame에 의존 안 함 — 포즈만 있으면 테스트 가능하도록)
 - Produces: `struct GeometricKeyframeFilter { let minBaselineRatio: Float; let minAngleDegrees: Float; func shouldSelect(candidatePose: simd_float4x4, lastKeyframePose: simd_float4x4?, objectCenter: simd_float3) -> Bool }`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `SplatForgeTests/GeometricKeyframeFilterTests.swift` (아직 `GeometricKeyframeFilter`가 없으므로 컴파일 실패 예상):
 
@@ -341,13 +347,13 @@ final class GeometricKeyframeFilterTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인** *(RED 확인: `cannot find 'GeometricKeyframeFilter' in scope`)*
 
 Xcode에서 Cmd+U (또는 Product > Test). `GeometricKeyframeFilter`가 없으므로 빌드 자체가 실패해야 한다.
 
 Expected: FAIL — "Cannot find 'GeometricKeyframeFilter' in scope"
 
-- [ ] **Step 3: 최소 구현 작성**
+- [x] **Step 3: 최소 구현 작성**
 
 `SplatForge/Capture/GeometricKeyframeFilter.swift`:
 
@@ -382,13 +388,13 @@ struct GeometricKeyframeFilter {
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인** *(GREEN: 3개 모두 통과)*
 
 Cmd+U 재실행.
 
 Expected: PASS — 3개 테스트 모두 통과.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋** *(e72ef77)*
 
 ```bash
 git add SplatForge/Capture/GeometricKeyframeFilter.swift SplatForgeTests/GeometricKeyframeFilterTests.swift
