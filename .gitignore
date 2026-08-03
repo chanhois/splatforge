@@ -13,3 +13,6 @@ Pods/
 # 에디터
 *.swp
 *.swo
+
+# OpenCV xcframework (47MB) — scripts/setup-opencv.sh로 생성
+Frameworks/

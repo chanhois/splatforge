@@ -23,7 +23,12 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXBuildFile section */
+		AA00000000000000000C0002 /* opencv2.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA00000000000000000C0001 /* opencv2.xcframework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		AA00000000000000000C0001 /* opencv2.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = opencv2.xcframework; path = Frameworks/opencv2.xcframework; sourceTree = "<group>"; };
 		AE3C64D5301F361D0055AB6E /* SplatForge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SplatForge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE3C64E2301F361E0055AB6E /* SplatForgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SplatForgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE3C64EC301F361E0055AB6E /* SplatForgeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SplatForgeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA00000000000000000C0002 /* opencv2.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +78,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		AA00000000000000000C0003 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000000000000000C0001 /* opencv2.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		AE3C64CC301F361D0055AB6E = {
 			isa = PBXGroup;
 			children = (
@@ -79,6 +93,7 @@
 				AE3C64E5301F361E0055AB6E /* SplatForgeTests */,
 				AE3C64EF301F361E0055AB6E /* SplatForgeUITests */,
 				AE3C64D6301F361D0055AB6E /* Products */,
+				AA00000000000000000C0003 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -391,6 +406,13 @@
 		AE3C64F7301F361E0055AB6E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks",
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "SplatForge/SplatForge-Bridging-Header.h";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -425,6 +447,13 @@
 		AE3C64F8301F361E0055AB6E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks",
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "SplatForge/SplatForge-Bridging-Header.h";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -459,6 +488,13 @@
 		AE3C64FA301F361E0055AB6E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks",
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "SplatForge/SplatForge-Bridging-Header.h";
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -480,6 +516,13 @@
 		AE3C64FB301F361E0055AB6E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Frameworks",
+				);
+				SWIFT_OBJC_BRIDGING_HEADER = "SplatForge/SplatForge-Bridging-Header.h";
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -501,6 +544,8 @@
 		AE3C64FD301F361E0055AB6E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -520,6 +565,8 @@
 		AE3C64FE301F361E0055AB6E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_WARN_DOCUMENTATION_COMMENTS = NO;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
