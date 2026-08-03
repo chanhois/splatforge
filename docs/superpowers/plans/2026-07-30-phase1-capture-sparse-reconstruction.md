@@ -75,7 +75,13 @@ SplatForge/
 - Consumes: 없음(첫 태스크)
 - Produces: `ContentView` (SwiftUI 진입점 뷰) — 이후 태스크들이 여기에 기능을 얹는다.
 
-- [ ] **Step 1: Xcode 프로젝트 생성**
+> **Xcode 26.6 실제 진행 시 발견된 차이점 (2026-08-03):**
+> - Xcode 26에는 **`Info.plist` 파일이 생성되지 않는다.** 대신 `project.pbxproj`의 `INFOPLIST_KEY_*` 빌드 설정으로 관리하고 빌드 시 자동 생성한다. 따라서 Step 3은 "Info.plist 편집"이 아니라 앱 타겟 빌드 설정에 `INFOPLIST_KEY_NSCameraUsageDescription`을 추가하는 것으로 대체됐다.
+> - 프로젝트 생성 시 **Testing System을 XCTest로 명시 선택**해야 한다(Xcode 26 기본값은 Swift Testing). 이 계획서의 테스트는 전부 `XCTestCase` 기반이다.
+> - 신규 프로젝트의 배포 타겟 기본값이 26.5라, 앱뿐 아니라 **프로젝트 레벨/테스트 타겟까지 전부 17.0으로** 내려야 한다(앱만 바꾸면 테스트 타겟이 26.5로 남는다).
+> - `SplatForgeUITests` 타겟도 함께 생성된다. Phase 1에서는 사용하지 않지만 그대로 둬도 무방.
+
+- [x] **Step 1: Xcode 프로젝트 생성**
 
 Xcode 실행 → File > New > Project > iOS > App. 설정값:
 - Product Name: `SplatForge`
@@ -85,13 +91,13 @@ Xcode 실행 → File > New > Project > iOS > App. 설정값:
 
 생성 후 프로젝트 네비게이터에서 `SplatForge` 타겟 선택 → General 탭 → Minimum Deployments를 **17.0**으로 설정.
 
-- [ ] **Step 2: 개발자 계정 + 기기 등록**
+- [ ] **Step 2: 개발자 계정 + 기기 등록** *(미완 — 개발자 모드 미설정. iPhone을 USB로 Mac에 최초 연결해야 설정 앱에 개발자 모드 항목이 나타난다)*
 
 Xcode > Settings > Accounts에서 Apple ID로 로그인(없으면 추가). 무료 개인 계정으로도 기기 빌드 가능(단, 서명 인증서가 7일마다 만료돼서 재빌드 필요 — 계속 불편하면 Apple Developer Program($99/년) 고려).
 
 iPhone에서 설정 > 개인정보 보호 및 보안 > 개발자 모드를 켜고 재시작(iOS 16+ 필수 단계, 안 하면 기기에 앱이 설치되지 않음).
 
-- [ ] **Step 3: 카메라 권한 설명 추가**
+- [x] **Step 3: 카메라 권한 설명 추가** *(Info.plist 파일 대신 `INFOPLIST_KEY_NSCameraUsageDescription` 빌드 설정으로 처리 — 위 박스 참고)*
 
 `Info.plist`에 다음 키 추가 (Xcode의 Info 탭에서 `+` 버튼으로 "Privacy - Camera Usage Description" 검색 후 추가, 또는 소스 코드 보기로 직접 편집):
 
@@ -102,7 +108,7 @@ iPhone에서 설정 > 개인정보 보호 및 보안 > 개발자 모드를 켜�
 
 ARKit는 카메라를 사용하므로 이 키가 없으면 앱이 즉시 크래시한다.
 
-- [ ] **Step 4: 최소 ARKit 카메라 프리뷰 작성**
+- [x] **Step 4: 최소 ARKit 카메라 프리뷰 작성**
 
 `SplatForge/ContentView.swift`:
 
@@ -137,13 +143,13 @@ struct ContentView: View {
 
 `SplatForge/SplatForgeApp.swift`는 Xcode가 이미 만들어준 기본 템플릿을 그대로 사용(`@main struct SplatForgeApp: App { var body: some Scene { WindowGroup { ContentView() } } }` 형태인지만 확인).
 
-- [ ] **Step 5: 실기기에서 빌드 및 확인**
+- [ ] **Step 5: 실기기에서 빌드 및 확인** *(대기 중 — 개발자 모드 설정 후 진행. 시뮬레이터 빌드는 경고 0건으로 통과 확인함)*
 
 iPhone을 USB로 연결(또는 같은 Wi-Fi에서 무선 연결 설정) → Xcode 상단에서 빌드 대상으로 본인 iPhone 선택 → Cmd+R로 실행. iPhone에서 "이 개발자를 신뢰하시겠습니까" 팝업이 뜨면 설정 > 일반 > VPN 및 기기 관리에서 신뢰 처리.
 
 Expected: 앱이 실행되고 카메라 화면이 실시간으로 보인다. (시뮬레이터로는 절대 확인 불가 — ARKit 미지원)
 
-- [ ] **Step 6: Git 저장소에 커밋**
+- [x] **Step 6: Git 저장소에 커밋** *(커밋 2635630. 원격: https://github.com/chanhois/splatforge)*
 
 ```bash
 cd /Users/seochanho/repositories/splatforge
