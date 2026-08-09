@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -9,6 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface OpenCVWrapper : NSObject
 
 + (NSString *)openCVVersion;
++ (double)laplacianVarianceForImage:(UIImage *)image NS_SWIFT_NAME(laplacianVariance(forImage:));
 
 @end
 
