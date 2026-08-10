@@ -18,6 +18,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingResult) {
             ResultView(viewModel: viewModel)
+                .interactiveDismissDisabled(viewModel.isProcessing)
         }
     }
 }

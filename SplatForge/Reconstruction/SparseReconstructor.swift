@@ -3,6 +3,9 @@ import UIKit
 import simd
 
 nonisolated enum SparseReconstructor {
+    static let defaultNeighborWindow = 3
+    static let minimumKeyframeCount = defaultNeighborWindow + 1
+
     struct DecodedRGBAImage {
         let width: Int
         let height: Int
@@ -40,6 +43,9 @@ nonisolated enum SparseReconstructor {
                     return false
                 }
 
+                // OpenCVWrapper draws the same CGImage into an RGBA bitmap with this exact
+                // untransformed Core Graphics convention. Its feature coordinates therefore
+                // index this color buffer directly, without an additional vertical flip.
                 context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
                 return true
             }
@@ -87,12 +93,27 @@ nonisolated enum SparseReconstructor {
 
     /// 각 키프레임을 기준(anchor)으로, 촬영 순서상 가까운 이웃과만 매칭한다.
     /// 턴테이블 캡처이므로 마지막 프레임과 첫 프레임도 순환 이웃으로 취급한다.
-    static func reconstruct(keyframes: [PosedFrame], neighborWindow: Int = 3) -> [SparsePoint3D] {
-        guard neighborWindow > 0, keyframes.count > neighborWindow else { return [] }
-
-        return neighborPairs(frameCount: keyframes.count, neighborWindow: neighborWindow).flatMap { pair in
-            reconstructPair(frameA: keyframes[pair.anchor], frameB: keyframes[pair.neighbor])
+    static func reconstruct(
+        keyframes: [PosedFrame],
+        neighborWindow: Int = defaultNeighborWindow
+    ) -> [SparsePoint3D] {
+        guard !Task.isCancelled,
+              neighborWindow > 0,
+              keyframes.count > neighborWindow else {
+            return []
         }
+
+        var points: [SparsePoint3D] = []
+        for pair in neighborPairs(frameCount: keyframes.count, neighborWindow: neighborWindow) {
+            guard !Task.isCancelled else { return points }
+            points.append(
+                contentsOf: reconstructPair(
+                    frameA: keyframes[pair.anchor],
+                    frameB: keyframes[pair.neighbor]
+                )
+            )
+        }
+        return points
     }
 
     static func neighborPairs(
@@ -156,6 +177,9 @@ nonisolated enum SparseReconstructor {
         var result: [SparsePoint3D] = []
         result.reserveCapacity(triangulated.count)
         for index in triangulated.indices {
+            if index.isMultiple(of: 256), Task.isCancelled {
+                return result
+            }
             let triangulatedPoint = triangulated[index]
             let position = simd_float3(
                 triangulatedPoint.x,
@@ -192,17 +216,24 @@ nonisolated enum SparseReconstructor {
     }
 
     private static func reconstructPair(frameA: PosedFrame, frameB: PosedFrame) -> [SparsePoint3D] {
-        guard let imageA = UIImage(contentsOfFile: frameA.imagePath.path),
+        guard !Task.isCancelled,
+              let imageA = UIImage(contentsOfFile: frameA.imagePath.path) else {
+            return []
+        }
+        guard !Task.isCancelled,
               let imageB = UIImage(contentsOfFile: frameB.imagePath.path) else {
             return []
         }
 
+        guard !Task.isCancelled else { return [] }
         let matches = OpenCVWrapper.matchFeatures(between: imageA, and: imageB)
-        guard !matches.points1.isEmpty,
+        guard !Task.isCancelled,
+              !matches.points1.isEmpty,
               matches.points1.count == matches.points2.count else {
             return []
         }
 
+        guard !Task.isCancelled else { return [] }
         let projection1 = ProjectionMath.projectionMatrixRowMajor(
             cameraToWorldPose: frameA.pose,
             intrinsics: frameA.intrinsics
@@ -211,14 +242,17 @@ nonisolated enum SparseReconstructor {
             cameraToWorldPose: frameB.pose,
             intrinsics: frameB.intrinsics
         ).map(NSNumber.init(value:))
+        guard !Task.isCancelled else { return [] }
         let triangulated = OpenCVWrapper.triangulate(
             withProjection1: projection1,
             points1: matches.points1,
             projection2: projection2,
             points2: matches.points2
         )
+        guard !Task.isCancelled else { return [] }
         let decodedImageA = DecodedRGBAImage(image: imageA)
 
+        guard !Task.isCancelled else { return [] }
         return makeSparsePoints(
             triangulated: triangulated,
             points1: matches.points1,

@@ -15,11 +15,12 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
     private let captureQueue = DispatchQueue(label: "com.splatforge.capture.processing")
     private let intakeLock = NSLock()
     private let keyframeSelector = KeyframeSelector()
-    private let storageDirectory: URL
+    private let captureStorage = CaptureRunStorage()
 
     // Access only on captureQueue.
     private var storedKeyframes: [PosedFrame] = []
     private var maximumKeyframeCount: Int?
+    private var activeRunDirectory: URL?
 
     // Access only while intakeLock is held.
     private var acceptsFrames = false
@@ -30,19 +31,6 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
     @MainActor private var publishedRunID: UUID?
 
     @MainActor override init() {
-        storageDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("capture-\(UUID().uuidString)", isDirectory: true)
-
-        do {
-            try FileManager.default.createDirectory(
-                at: storageDirectory,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-        } catch {
-            preconditionFailure("캡처 디렉터리를 만들 수 없습니다: \(error)")
-        }
-
         super.init()
         captureQueue.setSpecific(key: captureQueueKey, value: ())
         // ARKit serializes all delegate callbacks on this queue. start()/stop() can therefore fence
@@ -51,15 +39,25 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         session.delegateQueue = captureQueue
     }
 
-    @MainActor func start(maximumKeyframeCount: Int? = nil) {
+    @MainActor @discardableResult
+    func start(maximumKeyframeCount: Int? = nil) -> Bool {
         let normalizedMaximum = maximumKeyframeCount.map { max(0, $0) }
         session.pause()
         setAcceptsFrames(false)
+
+        let runDirectory: URL
+        do {
+            runDirectory = try captureStorage.makeRunDirectory()
+        } catch {
+            print("캡처 디렉터리를 만들 수 없습니다: \(error)")
+            return false
+        }
 
         synchronizeCaptureQueue {
             keyframeSelector.reset()
             storedKeyframes.removeAll()
             self.maximumKeyframeCount = normalizedMaximum
+            activeRunDirectory = runDirectory
         }
 
         let runID = UUID()
@@ -72,6 +70,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         configuration.planeDetection = [.horizontal]
         session.run(configuration)
         setAcceptsFrames(normalizedMaximum != 0)
+        return true
     }
 
     /// Pauses ARKit and waits for the one in-flight candidate, making `keyframes` stable on return.
@@ -104,6 +103,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
 
     private func process(_ frame: ARFrame, runID: UUID) {
         guard isActiveRun(runID) else { return }
+        guard let runDirectory = activeRunDirectory else { return }
         guard maximumKeyframeCount.map({ storedKeyframes.count < $0 }) ?? true else {
             setAcceptsFrames(false)
             return
@@ -123,7 +123,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
             return
         }
 
-        let imageURL = storageDirectory.appendingPathComponent("frame-\(storedKeyframes.count).jpg")
+        let imageURL = captureStorage.frameURL(index: storedKeyframes.count, in: runDirectory)
         do {
             try jpegData.write(to: imageURL, options: .atomic)
         } catch {

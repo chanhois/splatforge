@@ -16,8 +16,13 @@ final class FeatureMatchingTests: XCTestCase {
         let dxs = zip(result.points1, result.points2).map {
             $0.1.cgPointValue.x - $0.0.cgPointValue.x
         }
+        let dys = zip(result.points1, result.points2).map {
+            $0.1.cgPointValue.y - $0.0.cgPointValue.y
+        }
         let averageDx = dxs.reduce(0, +) / CGFloat(dxs.count)
+        let averageDy = dys.reduce(0, +) / CGFloat(dys.count)
         XCTAssertEqual(averageDx, 10, accuracy: 2.0)
+        XCTAssertEqual(averageDy, 6, accuracy: 2.0)
     }
 
     // Catches passing empty descriptors into the matcher or returning unaligned arrays.

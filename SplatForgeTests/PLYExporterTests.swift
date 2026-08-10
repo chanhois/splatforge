@@ -54,6 +54,31 @@ final class PLYExporterTests: XCTestCase {
         XCTAssertThrowsError(try PLYExporter.write(points: [], to: url))
     }
 
+    func test_preCancelledWriteThrowsCancellationWithoutCreatingFile() async {
+        let url = temporaryPLYURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let points = [
+            SparsePoint3D(position: simd_float3(1, 2, 3), color: SIMD3<UInt8>(255, 0, 0))
+        ]
+
+        let threwCancellation = await Task.detached {
+            withUnsafeCurrentTask { task in
+                task?.cancel()
+            }
+            do {
+                try PLYExporter.write(points: points, to: url)
+                return false
+            } catch is CancellationError {
+                return true
+            } catch {
+                return false
+            }
+        }.value
+
+        XCTAssertTrue(threwCancellation)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
     private func temporaryPLYURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("test-\(UUID().uuidString).ply")

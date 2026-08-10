@@ -50,10 +50,10 @@ struct CaptureView: View {
     private func toggleCapture() {
         if isCapturing {
             captureSession.stop()
+            isCapturing = false
             onCaptureFinished(captureSession.keyframes)
-        } else {
-            captureSession.start(maximumKeyframeCount: targetKeyframeCount)
+        } else if captureSession.start(maximumKeyframeCount: targetKeyframeCount) {
+            isCapturing = true
         }
-        isCapturing.toggle()
     }
 }

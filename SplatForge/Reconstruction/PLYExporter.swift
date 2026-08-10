@@ -2,7 +2,8 @@ import Foundation
 
 nonisolated enum PLYExporter {
     static func write(points: [SparsePoint3D], to url: URL) throws {
-        var lines = [
+        try Task.checkCancellation()
+        let header = [
             "ply",
             "format ascii 1.0",
             "element vertex \(points.count)",
@@ -14,13 +15,19 @@ nonisolated enum PLYExporter {
             "property uchar blue",
             "end_header"
         ]
+        var contents = header.joined(separator: "\n") + "\n"
 
-        lines.append(contentsOf: points.map { point in
-            "\(point.position.x) \(point.position.y) \(point.position.z) "
-                + "\(point.color.x) \(point.color.y) \(point.color.z)"
-        })
+        for (index, point) in points.enumerated() {
+            if index.isMultiple(of: 256) {
+                try Task.checkCancellation()
+            }
+            contents.append(
+                "\(point.position.x) \(point.position.y) \(point.position.z) "
+                    + "\(point.color.x) \(point.color.y) \(point.color.z)\n"
+            )
+        }
 
-        try (lines.joined(separator: "\n") + "\n")
-            .write(to: url, atomically: true, encoding: .utf8)
+        try Task.checkCancellation()
+        try contents.write(to: url, atomically: true, encoding: .utf8)
     }
 }

@@ -38,8 +38,12 @@ final class ReconstructionViewModelTests: XCTestCase {
 
     func test_exportFailurePublishesErrorAndNeverPublishesFileURL() async {
         let staleURL = temporaryPLYURL()
+        defer { try? FileManager.default.removeItem(at: staleURL) }
         let viewModel = ReconstructionViewModel(
-            worker: { _, _ in throw ExpectedFailure.export },
+            worker: { _, url in
+                try Data("partial export".utf8).write(to: url)
+                throw ExpectedFailure.export
+            },
             exportURLFactory: { staleURL }
         )
         viewModel.pointCount = 99
@@ -60,6 +64,41 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.pointCount)
         XCTAssertNil(viewModel.exportedFileURL)
         XCTAssertEqual(viewModel.errorMessage, ExpectedFailure.export.localizedDescription)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path))
+    }
+
+    func test_defaultWorkerRejectsInsufficientKeyframesWithoutCreatingPLY() async {
+        let outputURL = temporaryPLYURL()
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let viewModel = ReconstructionViewModel(exportURLFactory: { outputURL })
+
+        viewModel.reconstruct(keyframes: (0..<3).map(makeFrame(identifier:)))
+        guard await waitUntil({ !viewModel.isProcessing }) else {
+            XCTFail("Insufficient-input reconstruction did not finish")
+            return
+        }
+
+        XCTAssertNil(viewModel.pointCount)
+        XCTAssertNil(viewModel.exportedFileURL)
+        XCTAssertTrue(viewModel.errorMessage?.contains("최소 4") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+    }
+
+    func test_defaultWorkerRejectsMissingImagesWhenNoPointsAreReconstructed() async {
+        let outputURL = temporaryPLYURL()
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let viewModel = ReconstructionViewModel(exportURLFactory: { outputURL })
+
+        viewModel.reconstruct(keyframes: (0..<4).map(makeFrame(identifier:)))
+        guard await waitUntil({ !viewModel.isProcessing }) else {
+            XCTFail("Empty reconstruction did not finish")
+            return
+        }
+
+        XCTAssertNil(viewModel.pointCount)
+        XCTAssertNil(viewModel.exportedFileURL)
+        XCTAssertTrue(viewModel.errorMessage?.contains("3D 포인트") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
     }
 
     func test_olderRunCannotOverwriteNewerCompletion() async throws {
@@ -107,7 +146,13 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
 
         if let staleURL = await worker.outputURL(identifier: 1) {
-            try? FileManager.default.removeItem(at: staleURL)
+            guard await waitUntil({
+                !FileManager.default.fileExists(atPath: staleURL.path)
+            }) else {
+                XCTFail("Canceled run output was not removed")
+                return
+            }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path))
         }
     }
 
@@ -162,14 +207,9 @@ private actor ControlledWorker {
         let pointCount = try await withCheckedThrowingContinuation { continuation in
             continuations[identifier] = continuation
         }
-        let points = Array(
-            repeating: SparsePoint3D(
-                position: simd_float3(1, 2, 3),
-                color: SIMD3<UInt8>(255, 0, 0)
-            ),
-            count: pointCount
-        )
-        try PLYExporter.write(points: points, to: outputURL)
+        // Deliberately bypass the cancellation-aware production exporter: this fake models an
+        // injected worker that ignores cancellation and writes after a newer run has started.
+        try Data("late output for run \(identifier)".utf8).write(to: outputURL)
         returnedIdentifiers.insert(identifier)
         return pointCount
     }

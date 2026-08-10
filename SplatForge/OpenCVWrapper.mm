@@ -28,6 +28,8 @@ static NSArray<TriangulatedPoint *> *nonFiniteTriangulatedPoints(NSUInteger coun
 }
 
 // UIImage(CGImage 기반) -> cv::Mat(RGBA) 변환.
+// SparseReconstructor의 색상 샘플링과 동일하게 별도 좌표 변환 없이 전체 CGImage를
+// RGBA 비트맵에 그린다. 따라서 OpenCV 키포인트와 색상 샘플 좌표는 같은 픽셀 좌표계다.
 // 이후 태스크(feature matching 등)에서도 재사용하므로 static 헬퍼로 분리해둔다.
 static cv::Mat matFromUIImage(UIImage *image) {
     if (!image) {
