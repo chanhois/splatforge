@@ -725,7 +725,9 @@ git commit -m "Add Laplacian-variance blur detection via OpenCV"
   - `class KeyframeSelector { func passesGeometricFilter(pose: simd_float4x4, trackingState: ARCamera.TrackingState) -> Bool; func passesBlurFilter(image: UIImage) -> Bool; func commit(pose: simd_float4x4) }`
   - `CaptureSession.keyframes: [PosedFrame]` (캡처 종료 후 Task 10에서 사용)
 
-- [ ] **Step 1: CVPixelBuffer -> UIImage 변환 익스텐션 작성**
+> **실제 진행 시 보강됨 (2026-08-10):** 캡처 재시작 때 selector/object-center를 reset하고, JPEG 인코딩·atomic write가 성공한 뒤에만 selector commit/metadata append/count publish가 일어나도록 순서를 강화했다. ARSession delegate와 이미지/OpenCV/디스크 처리는 instance-specific serial capture queue에 두고, `pause → intake 차단 → queue drain → reset → run`으로 이전 run의 stale callback을 fence한다. `keyframeCount`만 main actor에 publish하며, CIContext는 프레임마다 만들지 않고 재사용한다.
+
+- [x] **Step 1: CVPixelBuffer -> UIImage 변환 익스텐션 작성** *(공유 CIContext 사용)*
 
 `SplatForge/Extensions/CVPixelBuffer+UIImage.swift`:
 
@@ -747,7 +749,7 @@ extension CVPixelBuffer {
 }
 ```
 
-- [ ] **Step 2: objectCenter 추정 로직을 포함한 KeyframeSelector 실패 테스트 작성**
+- [x] **Step 2: objectCenter 추정 로직을 포함한 KeyframeSelector 실패 테스트 작성** *(state/limited/-Z/reset 4개)*
 
 `SplatForgeTests/KeyframeSelectorStateTests.swift`:
 
@@ -786,11 +788,11 @@ final class KeyframeSelectorStateTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: 테스트 실패 확인**
+- [x] **Step 3: 테스트 실패 확인** *(RED: `KeyframeSelector` 부재)*
 
 Cmd+U. Expected: FAIL — `KeyframeSelector`가 없음.
 
-- [ ] **Step 4: KeyframeSelector 구현**
+- [x] **Step 4: KeyframeSelector 구현** *(capture-run reset 포함)*
 
 `SplatForge/Capture/KeyframeSelector.swift`:
 
@@ -846,11 +848,11 @@ final class KeyframeSelector {
 }
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인** *(GREEN: 전체 XCTest 13개 Passed)*
 
 Cmd+U. Expected: PASS.
 
-- [ ] **Step 6: CaptureSession에 실시간 필터링 + 디스크 저장 연결**
+- [x] **Step 6: CaptureSession에 실시간 필터링 + 디스크 저장 연결** *(queue/lifecycle/persistence 보강 포함)*
 
 `SplatForge/Capture/CaptureSession.swift`을 다음으로 교체:
 
@@ -916,13 +918,13 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
 
 `storageDirectory`가 매 실행마다 랜덤 UUID 폴더라 Finder에서 직접 찾아가긴 번거롭다 — 대신 이 `print`로 콘솔에서 바로 정확한 경로를 확인한다(Step 7 참고).
 
-- [ ] **Step 7: 실기기로 통합 확인**
+- [ ] **Step 7: 실기기로 통합 확인** *(대기 중 — 실제 ARFrame/JPEG 캡처는 물리 기기 필요)*
 
 Cmd+R로 실행 → 아무 물체(머그컵 등)를 앞에 두고 천천히 주위를 돈다.
 
 Expected: 앱 UI는 아직 카운터를 안 보여주지만(Task 7에서 추가), Xcode 콘솔에 "키프레임 #1 저장: /path/to/frame-0.jpg", "키프레임 #2 저장: ..."처럼 계속 로그가 찍힌다. 찍힌 경로 중 하나를 그대로 Finder의 "이동 > 폴더로 이동"(Cmd+Shift+G)에 붙여넣으면 실제 JPEG 파일이 저장돼 있는 걸 확인할 수 있다.
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋** *(2ce2a90, 32e393a, 619b755, fence 보강 dea7a1c)*
 
 ```bash
 git add SplatForge/Extensions/CVPixelBuffer+UIImage.swift SplatForge/Capture/KeyframeSelector.swift SplatForge/Capture/CaptureSession.swift SplatForgeTests/KeyframeSelectorStateTests.swift
