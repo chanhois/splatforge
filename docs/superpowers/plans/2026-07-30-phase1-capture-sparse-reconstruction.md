@@ -1527,7 +1527,7 @@ git commit -m "Add projection math and OpenCV triangulation with synthetic groun
   - `enum SparseReconstructor { static func reconstruct(keyframes: [PosedFrame], neighborWindow: Int = 3) -> [SparsePoint3D] }`
   - `enum PLYExporter { static func write(points: [SparsePoint3D], to url: URL) throws }`
 
-- [ ] **Step 1: SparsePoint3D 정의**
+- [x] **Step 1: SparsePoint3D 정의**
 
 `SplatForge/Reconstruction/SparsePoint3D.swift`:
 
@@ -1540,7 +1540,7 @@ struct SparsePoint3D {
 }
 ```
 
-- [ ] **Step 2: PLYExporter 실패 테스트 작성**
+- [x] **Step 2: PLYExporter 실패 테스트 작성**
 
 `SplatForgeTests/PLYExporterTests.swift`:
 
@@ -1566,7 +1566,7 @@ final class PLYExporterTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: 테스트 실패 확인 후 PLYExporter 구현**
+- [x] **Step 3: 테스트 실패 확인 후 PLYExporter 구현** *(RED exit 65 → PLY 3/3 PASS)*
 
 `SplatForge/Reconstruction/PLYExporter.swift`:
 
@@ -1598,7 +1598,7 @@ enum PLYExporter {
 
 Cmd+U로 통과 확인.
 
-- [ ] **Step 4: SparseReconstructor 작성 (재투영 오차 outlier 제거 포함)**
+- [x] **Step 4: SparseReconstructor 작성 (재투영 오차 outlier 제거 포함)** *(reconstructor 10/10, 전체 38/38 PASS)*
 
 `SplatForge/Reconstruction/SparseReconstructor.swift`:
 
@@ -1684,12 +1684,18 @@ enum SparseReconstructor {
 }
 ```
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋** *(b11786f, detached-task 격리 보강 c4d638b)*
 
 ```bash
 git add SplatForge/Reconstruction/SparsePoint3D.swift SplatForge/Reconstruction/SparseReconstructor.swift SplatForge/Reconstruction/PLYExporter.swift SplatForgeTests/PLYExporterTests.swift
 git commit -m "Add SparseReconstructor pipeline assembly and PLY export"
 ```
+
+> 구현 보강: `neighborWindow <= 0`을 안전하게 거부하고, Task 9의 NaN placeholder를 삭제해
+> 인덱스를 당기지 않고 같은 대응점 위치에서 필터링한다. 재투영 오차는 두 프레임 모두 검사한다.
+> JPEG `CGImage.dataProvider`의 encoded bytes를 픽셀처럼 직접 읽지 않고 Task 5와 동일한 RGBA8
+> 컨텍스트로 한 번 디코딩해 재사용한다. 다음 Task 11의 `Task.detached` 호출을 위해 순수 재구성/수학
+> 타입은 `nonisolated`, 경계를 건너는 `PosedFrame`/`SparsePoint3D`는 `Sendable`로 명시했다.
 
 ---
 
