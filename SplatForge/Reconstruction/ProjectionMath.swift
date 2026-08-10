@@ -1,7 +1,7 @@
 import CoreGraphics
 import simd
 
-enum ProjectionMath {
+nonisolated enum ProjectionMath {
     /// Converts ARKit's camera-to-world, local -Z-forward pose into a standard
     /// positive-depth pinhole projection matrix, returned row-major as 3x4 values.
     static func projectionMatrixRowMajor(

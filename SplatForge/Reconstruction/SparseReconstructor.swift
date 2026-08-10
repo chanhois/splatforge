@@ -2,7 +2,7 @@ import CoreGraphics
 import UIKit
 import simd
 
-enum SparseReconstructor {
+nonisolated enum SparseReconstructor {
     struct DecodedRGBAImage {
         let width: Int
         let height: Int

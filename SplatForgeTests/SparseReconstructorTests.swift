@@ -5,6 +5,19 @@ import UIKit
 @testable import SplatForge
 
 final class SparseReconstructorTests: XCTestCase {
+    func test_reconstructionRunsAcrossDetachedTaskBoundary() async {
+        let keyframes = [
+            makeFrame(imagePath: missingImageURL()),
+            makeFrame(imagePath: missingImageURL())
+        ]
+
+        let points: [SparsePoint3D] = await Task.detached {
+            SparseReconstructor.reconstruct(keyframes: keyframes, neighborWindow: 1)
+        }.value
+
+        XCTAssertTrue(points.isEmpty)
+    }
+
     func test_nonpositiveNeighborWindowsReturnEmptyWithoutTrapping() {
         let frame = makeFrame(imagePath: missingImageURL())
 
