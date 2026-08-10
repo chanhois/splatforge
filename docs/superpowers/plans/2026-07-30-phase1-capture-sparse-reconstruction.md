@@ -579,7 +579,9 @@ git commit -m "Add OpenCV via CocoaPods with Objective-C++ bridge smoke test"
 - Consumes: `OpenCVWrapper`(Task 4)
 - Produces: `OpenCVWrapper.laplacianVariance(forImage: UIImage) -> Double` (Swift에서 이렇게 보임 — Objective-C 셀렉터 `laplacianVarianceForImage:`를 Swift 임포터가 자동 변환)
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+> **실제 진행 시 보강됨 (2026-08-10):** 계획서의 최초 `matFromUIImage` 구현은 모든 `UIImage`가 `CGImage` backing을 가진다고 가정했지만, `UIImage(ciImage:)`로 만든 유효한 이미지에서는 `CGImage`가 nil일 수 있다. finite `CIImage`는 `CIContext`로 렌더링하고, backing/color space/bitmap context 생성이 실패하면 빈 Mat을 반환한 뒤 variance `0.0`으로 안전하게 거부하도록 보강했다. CIImage-backed 입력과 backing 없는 입력의 회귀 테스트도 추가했다.
+
+- [x] **Step 1: 실패하는 테스트 작성** *(checkerboard/solid + CIImage-backed + backing 없는 이미지)*
 
 `SplatForgeTests/BlurFilterTests.swift`:
 
@@ -620,13 +622,13 @@ final class BlurFilterTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인** *(RED: API 부재 확인, 보강 RED: 빈 Mat `cvtColor` assertion 확인)*
 
 Cmd+U.
 
 Expected: FAIL — "Type 'OpenCVWrapper' has no member 'laplacianVariance'"
 
-- [ ] **Step 3: OpenCVWrapper.h에 메서드 선언 추가**
+- [x] **Step 3: OpenCVWrapper.h에 메서드 선언 추가** *(`NS_SWIFT_NAME`으로 요구된 Swift selector 보장)*
 
 `SplatForge/OpenCVWrapper.h`을 다음으로 교체(기존 `openCVVersion` 선언 유지하고 추가):
 
@@ -646,7 +648,7 @@ NS_ASSUME_NONNULL_BEGIN
 NS_ASSUME_NONNULL_END
 ```
 
-- [ ] **Step 4: OpenCVWrapper.mm에 UIImage↔cv::Mat 변환 헬퍼 + 구현 추가**
+- [x] **Step 4: OpenCVWrapper.mm에 UIImage↔cv::Mat 변환 헬퍼 + 구현 추가** *(CIImage/failure 처리 보강 포함)*
 
 `SplatForge/OpenCVWrapper.mm`을 다음으로 교체:
 
@@ -693,13 +695,13 @@ static cv::Mat matFromUIImage(UIImage *image) {
 @end
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인** *(GREEN: 전체 XCTest 9개 Passed)*
 
 Cmd+U.
 
 Expected: PASS.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋** *(b28ef21, 보강 0f0a33c)*
 
 ```bash
 git add SplatForge/OpenCVWrapper.h SplatForge/OpenCVWrapper.mm SplatForgeTests/BlurFilterTests.swift
