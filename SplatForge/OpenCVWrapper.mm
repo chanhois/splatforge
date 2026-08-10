@@ -1,9 +1,31 @@
 #import "OpenCVWrapper.h"
 #import <CoreImage/CoreImage.h>
 #import <opencv2/opencv.hpp>
+#include <cmath>
+#include <limits>
 
 @implementation FeatureMatchResult
 @end
+
+@implementation TriangulatedPoint
+@end
+
+static TriangulatedPoint *nonFiniteTriangulatedPoint() {
+    const float notANumber = std::numeric_limits<float>::quiet_NaN();
+    TriangulatedPoint *point = [TriangulatedPoint new];
+    point.x = notANumber;
+    point.y = notANumber;
+    point.z = notANumber;
+    return point;
+}
+
+static NSArray<TriangulatedPoint *> *nonFiniteTriangulatedPoints(NSUInteger count) {
+    NSMutableArray<TriangulatedPoint *> *points = [NSMutableArray arrayWithCapacity:count];
+    for (NSUInteger index = 0; index < count; index++) {
+        [points addObject:nonFiniteTriangulatedPoint()];
+    }
+    return points;
+}
 
 // UIImage(CGImage 기반) -> cv::Mat(RGBA) 변환.
 // 이후 태스크(feature matching 등)에서도 재사용하므로 static 헬퍼로 분리해둔다.
@@ -133,6 +155,88 @@ static cv::Mat matFromUIImage(UIImage *image) {
     result.points1 = points1;
     result.points2 = points2;
     return result;
+}
+
++ (NSArray<TriangulatedPoint *> *)triangulateWithProjection1:(NSArray<NSNumber *> *)projection1
+                                                      points1:(NSArray<NSValue *> *)points1
+                                                  projection2:(NSArray<NSNumber *> *)projection2
+                                                      points2:(NSArray<NSValue *> *)points2 {
+    const NSUInteger correspondenceCount = points1.count;
+    if (projection1.count != 12 || projection2.count != 12 ||
+        correspondenceCount == 0 || correspondenceCount != points2.count) {
+        return @[];
+    }
+
+    try {
+        cv::Mat projectionMatrix1(3, 4, CV_64F);
+        cv::Mat projectionMatrix2(3, 4, CV_64F);
+        for (int index = 0; index < 12; index++) {
+            projectionMatrix1.at<double>(index / 4, index % 4) = projection1[index].doubleValue;
+            projectionMatrix2.at<double>(index / 4, index % 4) = projection2[index].doubleValue;
+        }
+
+        std::vector<cv::Point2d> imagePoints1;
+        std::vector<cv::Point2d> imagePoints2;
+        imagePoints1.reserve(correspondenceCount);
+        imagePoints2.reserve(correspondenceCount);
+        for (NSUInteger index = 0; index < correspondenceCount; index++) {
+            const CGPoint point1 = points1[index].CGPointValue;
+            const CGPoint point2 = points2[index].CGPointValue;
+            imagePoints1.emplace_back(point1.x, point1.y);
+            imagePoints2.emplace_back(point2.x, point2.y);
+        }
+
+        cv::Mat homogeneousPoints;
+        cv::triangulatePoints(
+            projectionMatrix1,
+            projectionMatrix2,
+            imagePoints1,
+            imagePoints2,
+            homogeneousPoints
+        );
+
+        cv::Mat homogeneousPointsDouble;
+        homogeneousPoints.convertTo(homogeneousPointsDouble, CV_64F);
+        if (homogeneousPointsDouble.rows != 4 ||
+            homogeneousPointsDouble.cols != static_cast<int>(correspondenceCount)) {
+            return nonFiniteTriangulatedPoints(correspondenceCount);
+        }
+
+        NSMutableArray<TriangulatedPoint *> *results =
+            [NSMutableArray arrayWithCapacity:correspondenceCount];
+        for (int index = 0; index < homogeneousPointsDouble.cols; index++) {
+            const double w = homogeneousPointsDouble.at<double>(3, index);
+            if (!std::isfinite(w) || std::fabs(w) < 1e-9) {
+                [results addObject:nonFiniteTriangulatedPoint()];
+                continue;
+            }
+
+            const double x = homogeneousPointsDouble.at<double>(0, index) / w;
+            const double y = homogeneousPointsDouble.at<double>(1, index) / w;
+            const double z = homogeneousPointsDouble.at<double>(2, index) / w;
+            if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+                [results addObject:nonFiniteTriangulatedPoint()];
+                continue;
+            }
+
+            TriangulatedPoint *point = [TriangulatedPoint new];
+            point.x = static_cast<float>(x);
+            point.y = static_cast<float>(y);
+            point.z = static_cast<float>(z);
+            if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z)) {
+                [results addObject:nonFiniteTriangulatedPoint()];
+            } else {
+                [results addObject:point];
+            }
+        }
+        return results;
+    } catch (const cv::Exception &) {
+        return nonFiniteTriangulatedPoints(correspondenceCount);
+    } catch (const std::exception &) {
+        return nonFiniteTriangulatedPoints(correspondenceCount);
+    } catch (...) {
+        return nonFiniteTriangulatedPoints(correspondenceCount);
+    }
 }
 
 @end
