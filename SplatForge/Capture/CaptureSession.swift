@@ -44,6 +44,10 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
 
         super.init()
         captureQueue.setSpecific(key: captureQueueKey, value: ())
+        // ARKit serializes all delegate callbacks on this queue. start()/stop() can therefore fence
+        // callbacks from an older run by synchronizing this same queue after session.pause().
+        session.delegate = self
+        session.delegateQueue = captureQueue
     }
 
     @MainActor func start() {
@@ -58,14 +62,13 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         let runID = UUID()
         intakeLock.lock()
         activeRunID = runID
-        acceptsFrames = true
         intakeLock.unlock()
         beginPublishing(runID: runID)
 
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]
-        session.delegate = self
         session.run(configuration)
+        setAcceptsFrames(true)
     }
 
     /// Pauses ARKit and waits for the one in-flight candidate, making `keyframes` stable on return.
