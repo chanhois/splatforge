@@ -1,6 +1,6 @@
 import Foundation
 
-enum PLYExporter {
+nonisolated enum PLYExporter {
     static func write(points: [SparsePoint3D], to url: URL) throws {
         var lines = [
             "ply",

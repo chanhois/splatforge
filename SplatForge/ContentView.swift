@@ -8,10 +8,16 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var viewModel = ReconstructionViewModel()
+    @State private var isShowingResult = false
+
     var body: some View {
         CaptureView { keyframes in
-            print("캡처 완료: \(keyframes.count)개 키프레임")
-            // Task 11에서 여기를 재구성 파이프라인 호출로 교체한다.
+            isShowingResult = true
+            viewModel.reconstruct(keyframes: keyframes)
+        }
+        .sheet(isPresented: $isShowingResult) {
+            ResultView(viewModel: viewModel)
         }
     }
 }
