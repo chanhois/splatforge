@@ -1265,7 +1265,7 @@ git commit -m "Add ORB feature detection and matching via OpenCV"
   - `static func project(worldPoint: simd_float3, pose: simd_float4x4, intrinsics: simd_float3x3) -> (pixel: CGPoint, isInFrontOfCamera: Bool) }`
   - Objective-C: `@interface TriangulatedPoint : NSObject @property float x, y, z; @end` / `+ (NSArray<TriangulatedPoint *> *)triangulateWithProjection1:points1:projection2:points2:` → Swift: `OpenCVWrapper.triangulate(withProjection1:points1:projection2:points2:) -> [TriangulatedPoint]`
 
-- [ ] **Step 1: ProjectionMath 실패 테스트 작성**
+- [x] **Step 1: ProjectionMath 실패 테스트 작성**
 
 `SplatForgeTests/ProjectionMathTests.swift`:
 
@@ -1287,9 +1287,9 @@ final class ProjectionMathTests: XCTestCase {
 
         XCTAssertEqual(p.count, 12)
         XCTAssertEqual(p[0], 500, accuracy: 1e-4)   // fx
-        XCTAssertEqual(p[2], 320, accuracy: 1e-4)   // px
+        XCTAssertEqual(p[2], -320, accuracy: 1e-4)  // 분모가 -Z이므로 numerator의 주점 계수는 -px
         XCTAssertEqual(p[5], 500, accuracy: 1e-4)   // fy
-        XCTAssertEqual(p[6], 240, accuracy: 1e-4)   // py
+        XCTAssertEqual(p[6], -240, accuracy: 1e-4)  // 분모가 -Z이므로 numerator의 주점 계수는 -py
         XCTAssertEqual(p[10], -1, accuracy: 1e-4)   // -Z 보정 반영
     }
 
@@ -1308,11 +1308,11 @@ final class ProjectionMathTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인** *(RED — `ProjectionMath` 미정의, exit 65)*
 
 Cmd+U. Expected: FAIL — `ProjectionMath`가 없음.
 
-- [ ] **Step 3: ProjectionMath 구현**
+- [x] **Step 3: ProjectionMath 구현**
 
 `SplatForge/Reconstruction/ProjectionMath.swift`:
 
@@ -1368,11 +1368,11 @@ enum ProjectionMath {
 }
 ```
 
-- [ ] **Step 4: ProjectionMath 테스트 통과 확인**
+- [x] **Step 4: ProjectionMath 테스트 통과 확인** *(4/4 PASS)*
 
 Cmd+U. Expected: PASS.
 
-- [ ] **Step 5: Triangulation 실패 테스트 작성**
+- [x] **Step 5: Triangulation 실패 테스트 작성**
 
 `SplatForgeTests/TriangulationTests.swift`:
 
@@ -1416,11 +1416,11 @@ final class TriangulationTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 6: 테스트 실패 확인**
+- [x] **Step 6: 테스트 실패 확인** *(RED — `TriangulatedPoint`/triangulation API 미정의, exit 65)*
 
 Cmd+U. Expected: FAIL — `triangulate(withProjection1:...)`가 없음.
 
-- [ ] **Step 7: OpenCVWrapper.h에 선언 추가**
+- [x] **Step 7: OpenCVWrapper.h에 선언 추가**
 
 `SplatForge/OpenCVWrapper.h`에 `FeatureMatchResult` 인터페이스 뒤, `OpenCVWrapper` 인터페이스 안에 추가:
 
@@ -1446,7 +1446,7 @@ Cmd+U. Expected: FAIL — `triangulate(withProjection1:...)`가 없음.
 
 (전체 파일 구조는 `TriangulatedPoint`/`FeatureMatchResult` 두 인터페이스가 `OpenCVWrapper` 인터페이스보다 위에 오도록 배치)
 
-- [ ] **Step 8: OpenCVWrapper.mm에 구현 추가**
+- [x] **Step 8: OpenCVWrapper.mm에 구현 추가**
 
 `SplatForge/OpenCVWrapper.mm` 맨 위(다른 `@implementation`들 앞)에 `@implementation TriangulatedPoint @end` 추가, `@implementation OpenCVWrapper` 블록의 `matchFeaturesBetween:and:` 뒤에 추가:
 
@@ -1494,16 +1494,21 @@ Cmd+U. Expected: FAIL — `triangulate(withProjection1:...)`가 없음.
 }
 ```
 
-- [ ] **Step 9: 테스트 통과 확인**
+- [x] **Step 9: 테스트 통과 확인** *(triangulation 5/5, 전체 25/25 PASS)*
 
 Cmd+U. Expected: PASS — 이게 파이프라인 전체에서 가장 중요한 테스트다. 실패하면 `-Z` 보정 부분(Step 3)을 다시 확인.
 
-- [ ] **Step 10: 커밋**
+- [x] **Step 10: 커밋** *(bab425c)*
 
 ```bash
 git add SplatForge/Reconstruction/ProjectionMath.swift SplatForge/OpenCVWrapper.h SplatForge/OpenCVWrapper.mm SplatForgeTests/ProjectionMathTests.swift SplatForgeTests/TriangulationTests.swift
 git commit -m "Add projection math and OpenCV triangulation with synthetic ground-truth tests"
 ```
+
+> 구현 보강: 계획의 행렬 생성 알고리즘대로 Z 행을 뒤집으면 homogeneous 분모는 `-Z`가 되므로
+> identity 행렬의 주점 계수는 `+cx/+cy`가 아니라 `-cx/-cy`가 맞다. 합성 ground truth로 이를
+> 교차 검증했다. 공개 triangulation 경계는 12원소/동일 개수 입력을 검증하고, 퇴화점은 NaN
+> placeholder로 같은 인덱스에 남겨 이후 매칭 대응이 밀리지 않게 한다.
 
 ---
 
