@@ -52,7 +52,7 @@ struct CaptureView: View {
             captureSession.stop()
             onCaptureFinished(captureSession.keyframes)
         } else {
-            captureSession.start()
+            captureSession.start(maximumKeyframeCount: targetKeyframeCount)
         }
         isCapturing.toggle()
     }

@@ -19,6 +19,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
 
     // Access only on captureQueue.
     private var storedKeyframes: [PosedFrame] = []
+    private var maximumKeyframeCount: Int?
 
     // Access only while intakeLock is held.
     private var acceptsFrames = false
@@ -50,13 +51,15 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         session.delegateQueue = captureQueue
     }
 
-    @MainActor func start() {
+    @MainActor func start(maximumKeyframeCount: Int? = nil) {
+        let normalizedMaximum = maximumKeyframeCount.map { max(0, $0) }
         session.pause()
         setAcceptsFrames(false)
 
         synchronizeCaptureQueue {
             keyframeSelector.reset()
             storedKeyframes.removeAll()
+            self.maximumKeyframeCount = normalizedMaximum
         }
 
         let runID = UUID()
@@ -68,7 +71,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]
         session.run(configuration)
-        setAcceptsFrames(true)
+        setAcceptsFrames(normalizedMaximum != 0)
     }
 
     /// Pauses ARKit and waits for the one in-flight candidate, making `keyframes` stable on return.
@@ -101,6 +104,10 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
 
     private func process(_ frame: ARFrame, runID: UUID) {
         guard isActiveRun(runID) else { return }
+        guard maximumKeyframeCount.map({ storedKeyframes.count < $0 }) ?? true else {
+            setAcceptsFrames(false)
+            return
+        }
         let pose = frame.camera.transform
         guard keyframeSelector.passesGeometricFilter(pose: pose, trackingState: frame.camera.trackingState) else {
             return
@@ -134,6 +141,10 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         )
         storedKeyframes.append(posedFrame)
         let count = storedKeyframes.count
+        if maximumKeyframeCount.map({ count >= $0 }) ?? false {
+            // Close intake before publishing asynchronously and before the reservation is released.
+            setAcceptsFrames(false)
+        }
         publishKeyframeCount(count, for: runID)
         print("키프레임 #\(count) 저장: \(imageURL.path)")
     }
