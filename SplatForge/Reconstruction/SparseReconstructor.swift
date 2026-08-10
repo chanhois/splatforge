@@ -103,14 +103,23 @@ nonisolated enum SparseReconstructor {
             return []
         }
 
+        return reconstructPairs(
+            keyframes: keyframes,
+            pairs: neighborPairs(frameCount: keyframes.count, neighborWindow: neighborWindow),
+            pairHandler: reconstructPair
+        )
+    }
+
+    static func reconstructPairs(
+        keyframes: [PosedFrame],
+        pairs: [(anchor: Int, neighbor: Int)],
+        pairHandler: (PosedFrame, PosedFrame) -> [SparsePoint3D]
+    ) -> [SparsePoint3D] {
         var points: [SparsePoint3D] = []
-        for pair in neighborPairs(frameCount: keyframes.count, neighborWindow: neighborWindow) {
+        for pair in pairs {
             guard !Task.isCancelled else { return points }
             points.append(
-                contentsOf: reconstructPair(
-                    frameA: keyframes[pair.anchor],
-                    frameB: keyframes[pair.neighbor]
-                )
+                contentsOf: pairHandler(keyframes[pair.anchor], keyframes[pair.neighbor])
             )
         }
         return points

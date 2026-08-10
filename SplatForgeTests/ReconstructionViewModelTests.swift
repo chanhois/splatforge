@@ -9,14 +9,14 @@ final class ReconstructionViewModelTests: XCTestCase {
             SparsePoint3D(position: simd_float3(1, 2, 3), color: SIMD3<UInt8>(255, 0, 0)),
             SparsePoint3D(position: simd_float3(4, 5, 6), color: SIMD3<UInt8>(0, 255, 0))
         ]
-        let outputURL = temporaryPLYURL()
-        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let outputDirectory = try temporaryOutputDirectory()
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
         let viewModel = ReconstructionViewModel(
             worker: { _, url in
                 try PLYExporter.write(points: points, to: url)
                 return points.count
             },
-            exportURLFactory: { outputURL }
+            exportDirectoryFactory: { outputDirectory }
         )
 
         viewModel.reconstruct(keyframes: [])
@@ -31,23 +31,26 @@ final class ReconstructionViewModelTests: XCTestCase {
         }
 
         XCTAssertEqual(viewModel.pointCount, 2)
-        XCTAssertEqual(viewModel.exportedFileURL, outputURL)
+        let outputURL = try XCTUnwrap(viewModel.exportedFileURL)
+        XCTAssertEqual(outputURL.deletingLastPathComponent(), outputDirectory)
+        XCTAssertTrue(outputURL.lastPathComponent.hasPrefix("sparse-"))
+        XCTAssertEqual(outputURL.pathExtension, "ply")
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
     }
 
-    func test_exportFailurePublishesErrorAndNeverPublishesFileURL() async {
-        let staleURL = temporaryPLYURL()
-        defer { try? FileManager.default.removeItem(at: staleURL) }
+    func test_exportFailurePublishesErrorAndNeverPublishesFileURL() async throws {
+        let outputDirectory = try temporaryOutputDirectory()
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
         let viewModel = ReconstructionViewModel(
             worker: { _, url in
                 try Data("partial export".utf8).write(to: url)
                 throw ExpectedFailure.export
             },
-            exportURLFactory: { staleURL }
+            exportDirectoryFactory: { outputDirectory }
         )
         viewModel.pointCount = 99
-        viewModel.exportedFileURL = staleURL
+        viewModel.exportedFileURL = outputDirectory.appendingPathComponent("previous.ply")
         viewModel.errorMessage = "이전 오류"
 
         viewModel.reconstruct(keyframes: [])
@@ -64,13 +67,13 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.pointCount)
         XCTAssertNil(viewModel.exportedFileURL)
         XCTAssertEqual(viewModel.errorMessage, ExpectedFailure.export.localizedDescription)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: outputDirectory.path).isEmpty)
     }
 
-    func test_defaultWorkerRejectsInsufficientKeyframesWithoutCreatingPLY() async {
-        let outputURL = temporaryPLYURL()
-        defer { try? FileManager.default.removeItem(at: outputURL) }
-        let viewModel = ReconstructionViewModel(exportURLFactory: { outputURL })
+    func test_defaultWorkerRejectsInsufficientKeyframesWithoutCreatingPLY() async throws {
+        let outputDirectory = try temporaryOutputDirectory()
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+        let viewModel = ReconstructionViewModel(exportDirectoryFactory: { outputDirectory })
 
         viewModel.reconstruct(keyframes: (0..<3).map(makeFrame(identifier:)))
         guard await waitUntil({ !viewModel.isProcessing }) else {
@@ -81,13 +84,13 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.pointCount)
         XCTAssertNil(viewModel.exportedFileURL)
         XCTAssertTrue(viewModel.errorMessage?.contains("최소 4") == true)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: outputDirectory.path).isEmpty)
     }
 
-    func test_defaultWorkerRejectsMissingImagesWhenNoPointsAreReconstructed() async {
-        let outputURL = temporaryPLYURL()
-        defer { try? FileManager.default.removeItem(at: outputURL) }
-        let viewModel = ReconstructionViewModel(exportURLFactory: { outputURL })
+    func test_defaultWorkerRejectsMissingImagesWhenNoPointsAreReconstructed() async throws {
+        let outputDirectory = try temporaryOutputDirectory()
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+        let viewModel = ReconstructionViewModel(exportDirectoryFactory: { outputDirectory })
 
         viewModel.reconstruct(keyframes: (0..<4).map(makeFrame(identifier:)))
         guard await waitUntil({ !viewModel.isProcessing }) else {
@@ -98,16 +101,19 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.pointCount)
         XCTAssertNil(viewModel.exportedFileURL)
         XCTAssertTrue(viewModel.errorMessage?.contains("3D 포인트") == true)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: outputDirectory.path).isEmpty)
     }
 
     func test_olderRunCannotOverwriteNewerCompletion() async throws {
         let worker = ControlledWorker()
+        let outputDirectory = try temporaryOutputDirectory()
+        defer { try? FileManager.default.removeItem(at: outputDirectory) }
         let viewModel = ReconstructionViewModel(
             worker: { keyframes, url in
                 let identifier = Int(keyframes[0].timestamp)
                 return try await worker.run(identifier: identifier, outputURL: url)
-            }
+            },
+            exportDirectoryFactory: { outputDirectory }
         )
 
         viewModel.reconstruct(keyframes: [makeFrame(identifier: 1)])
@@ -129,7 +135,10 @@ final class ReconstructionViewModelTests: XCTestCase {
         }
         XCTAssertEqual(viewModel.pointCount, 22)
         let newestURL = try XCTUnwrap(viewModel.exportedFileURL)
-        defer { try? FileManager.default.removeItem(at: newestURL) }
+        XCTAssertEqual(
+            try String(contentsOf: newestURL, encoding: .utf8),
+            "late output for run 2"
+        )
 
         await worker.succeed(identifier: 1, pointCount: 11)
         guard await waitUntil({ await worker.hasReturned(identifier: 1) }) else {
@@ -146,6 +155,7 @@ final class ReconstructionViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
 
         if let staleURL = await worker.outputURL(identifier: 1) {
+            XCTAssertNotEqual(staleURL, newestURL)
             guard await waitUntil({
                 !FileManager.default.fileExists(atPath: staleURL.path)
             }) else {
@@ -154,6 +164,11 @@ final class ReconstructionViewModelTests: XCTestCase {
             }
             XCTAssertFalse(FileManager.default.fileExists(atPath: staleURL.path))
         }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newestURL.path))
+        XCTAssertEqual(
+            try String(contentsOf: newestURL, encoding: .utf8),
+            "late output for run 2"
+        )
     }
 
     private func makeFrame(identifier: Int) -> PosedFrame {
@@ -166,9 +181,14 @@ final class ReconstructionViewModelTests: XCTestCase {
         )
     }
 
-    private func temporaryPLYURL() -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("view-model-test-\(UUID().uuidString).ply")
+    private func temporaryOutputDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("view-model-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory
     }
 
     private func waitUntil(

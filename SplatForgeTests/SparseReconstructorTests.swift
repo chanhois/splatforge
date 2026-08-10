@@ -18,6 +18,29 @@ final class SparseReconstructorTests: XCTestCase {
         XCTAssertTrue(points.isEmpty)
     }
 
+    func test_pairTraversalStopsBeforeSecondHandlerAfterCancellation() async {
+        let keyframes = (0..<3).map { _ in
+            makeFrame(imagePath: missingImageURL())
+        }
+
+        let handledPairCount = await Task.detached {
+            var count = 0
+            _ = SparseReconstructor.reconstructPairs(
+                keyframes: keyframes,
+                pairs: [(anchor: 0, neighbor: 1), (anchor: 1, neighbor: 2)]
+            ) { _, _ in
+                count += 1
+                withUnsafeCurrentTask { task in
+                    task?.cancel()
+                }
+                return []
+            }
+            return count
+        }.value
+
+        XCTAssertEqual(handledPairCount, 1)
+    }
+
     func test_nonpositiveNeighborWindowsReturnEmptyWithoutTrapping() {
         let frame = makeFrame(imagePath: missingImageURL())
 

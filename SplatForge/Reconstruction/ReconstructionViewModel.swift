@@ -25,23 +25,24 @@ final class ReconstructionViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let worker: Worker
-    private let exportURLFactory: @Sendable () -> URL
+    private let exportDirectoryFactory: @Sendable () -> URL
     private var activeRunID: UUID?
     private var activeTask: Task<Void, Never>?
 
     init(
         worker: @escaping Worker = ReconstructionViewModel.reconstructAndExport,
-        exportURLFactory: @escaping @Sendable () -> URL = ReconstructionViewModel.makeExportURL
+        exportDirectoryFactory: @escaping @Sendable () -> URL = ReconstructionViewModel.makeExportDirectory
     ) {
         self.worker = worker
-        self.exportURLFactory = exportURLFactory
+        self.exportDirectoryFactory = exportDirectoryFactory
     }
 
     func reconstruct(keyframes: [PosedFrame]) {
         activeTask?.cancel()
 
         let runID = UUID()
-        let outputURL = exportURLFactory()
+        let outputURL = exportDirectoryFactory()
+            .appendingPathComponent("sparse-\(runID.uuidString).ply")
         let worker = worker
         activeRunID = runID
         isProcessing = true
@@ -116,9 +117,14 @@ final class ReconstructionViewModel: ObservableObject {
         return points.count
     }
 
-    nonisolated private static func makeExportURL() -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("sparse-\(UUID().uuidString).ply")
+    nonisolated private static func makeExportDirectory() -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SplatForge-Exports", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory
     }
 
     nonisolated private static func removeOutputFile(at outputURL: URL) {
