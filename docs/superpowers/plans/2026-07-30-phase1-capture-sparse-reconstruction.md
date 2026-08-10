@@ -1710,7 +1710,7 @@ git commit -m "Add SparseReconstructor pipeline assembly and PLY export"
 - Consumes: `SparseReconstructor`, `PLYExporter`(Task 10), `CaptureView`(Task 7)
 - Produces: 없음(최종 UI 조립 — Phase 1의 마지막 태스크)
 
-- [ ] **Step 1: ReconstructionViewModel 작성**
+- [x] **Step 1: ReconstructionViewModel 작성**
 
 `SplatForge/Reconstruction/ReconstructionViewModel.swift`:
 
@@ -1747,7 +1747,7 @@ final class ReconstructionViewModel: ObservableObject {
 }
 ```
 
-- [ ] **Step 2: ResultView 작성**
+- [x] **Step 2: ResultView 작성**
 
 `SplatForge/Result/ResultView.swift`:
 
@@ -1775,7 +1775,7 @@ struct ResultView: View {
 }
 ```
 
-- [ ] **Step 3: ContentView에서 캡처 -> 재구성 -> 결과 흐름 연결**
+- [x] **Step 3: ContentView에서 캡처 -> 재구성 -> 결과 흐름 연결**
 
 `SplatForge/ContentView.swift`:
 
@@ -1816,12 +1816,17 @@ Expected: 포인트 수가 0이 아니고(수백~수천 개 수준이면 정상)
 
 **비정상 — 부호 문제 의심**: 점들이 넓게 흩어져 있거나, 카메라 궤적 반대쪽에 있거나, 형태를 전혀 알아볼 수 없다면 Task 9에서 다룬 -Z 부호 보정이 실제 ARKit 데이터에서는 반대일 가능성이 있다. 이 경우 `ProjectionMath.swift`의 `projectionMatrixRowMajor`와 `project` 두 함수에서 Z 부호 반전(`-m.columns.*.z`, `camPoint4.z < 0`, `correctedZ = -camPoint4.z`)을 모두 반대로 바꿔서(즉 부호 반전을 제거하고) 다시 시도해본다. `TriangulationTests`(Task 9)의 합성 데이터 테스트는 이 프로젝트 내부적으로는 항상 일관되게 통과하므로(투영과 삼각측량이 같은 규약을 공유), 실제 ARKit 데이터에서만 드러나는 문제라는 점에 유의.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋** *(e2704a0)*
 
 ```bash
 git add SplatForge/Reconstruction/ReconstructionViewModel.swift SplatForge/Result/ResultView.swift SplatForge/ContentView.swift
 git commit -m "Wire capture-to-reconstruction-to-export end-to-end flow"
 ```
+
+> 자동 구현 보강: 재구성과 PLY 쓰기를 모두 detached 작업에서 수행하고, UUID 실행 토큰으로 이전
+> 작업이 최신 UI 상태를 덮지 못하게 한다. PLY 쓰기가 실제 성공한 뒤에만 공유 URL을 공개하며,
+> 실패는 별도 상태로 화면에 표시한다. ViewModel 집중 3/3, 전체 41/41 테스트와 시뮬레이터 앱 빌드는
+> 통과했다. Step 4~5의 실제 카메라 캡처/점군 시각 검증은 물리 기기에서 수행할 때까지 미완료다.
 
 ---
 
