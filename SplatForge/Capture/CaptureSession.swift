@@ -1,32 +1,177 @@
 import ARKit
 import Combine
 
-/// ARSession을 감싸는 클래스. 이 시점에서는 재구성 로직을 전혀 모르고,
-/// ARKit이 주는 프레임을 받아서 콘솔에 찍어보는 것까지만 한다 —
-/// 실시간 키프레임 필터링/저장은 Task 6에서 추가된다.
+/// Owns an AR capture run and streams accepted keyframes to JPEG files instead of retaining pixels in memory.
 final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
     let session = ARSession()
     @Published private(set) var keyframeCount = 0
 
-    private var frameCounter = 0
+    /// A snapshot is synchronized with the capture queue, so callers may safely read it after `stop()`.
+    var keyframes: [PosedFrame] {
+        synchronizeCaptureQueue { storedKeyframes }
+    }
+
+    private static let captureQueueKey = DispatchSpecificKey<Void>()
+    private let captureQueue = DispatchQueue(label: "com.splatforge.capture.processing")
+    private let intakeLock = NSLock()
+    private let keyframeSelector = KeyframeSelector()
+    private let storageDirectory: URL
+
+    // Access only on captureQueue.
+    private var storedKeyframes: [PosedFrame] = []
+
+    // Access only while intakeLock is held.
+    private var acceptsFrames = false
+    private var isProcessingFrame = false
+    private var activeRunID = UUID()
+
+    // Access only on the main thread. It prevents an older run's queued UI update from winning.
+    private var publishedRunID: UUID?
+
+    override init() {
+        storageDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("capture-\(UUID().uuidString)", isDirectory: true)
+
+        do {
+            try FileManager.default.createDirectory(
+                at: storageDirectory,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+        } catch {
+            preconditionFailure("캡처 디렉터리를 만들 수 없습니다: \(error)")
+        }
+
+        super.init()
+        captureQueue.setSpecific(key: Self.captureQueueKey, value: ())
+    }
 
     func start() {
+        session.pause()
+        setAcceptsFrames(false)
+
+        synchronizeCaptureQueue {
+            keyframeSelector.reset()
+            storedKeyframes.removeAll()
+        }
+
+        let runID = UUID()
+        intakeLock.lock()
+        activeRunID = runID
+        isProcessingFrame = false
+        acceptsFrames = true
+        intakeLock.unlock()
+        beginPublishing(runID: runID)
+
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]
         session.delegate = self
         session.run(configuration)
     }
 
+    /// Pauses ARKit and waits for the one in-flight candidate, making `keyframes` stable on return.
     func stop() {
         session.pause()
+        setAcceptsFrames(false)
+        synchronizeCaptureQueue {}
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        frameCounter += 1
-        // 30프레임(약 0.5초)마다 한 번씩만 로그 — 매 프레임 찍으면 콘솔이 감당 안 됨
-        if frameCounter % 30 == 0 {
-            let t = frame.camera.transform.columns.3
-            print("frame #\(frameCounter) tracking=\(frame.camera.trackingState) pos=(\(t.x), \(t.y), \(t.z))")
+        let runID: UUID
+        intakeLock.lock()
+        guard acceptsFrames, !isProcessingFrame else {
+            intakeLock.unlock()
+            return
+        }
+        isProcessingFrame = true
+        runID = activeRunID
+        intakeLock.unlock()
+
+        // This is a bounded hand-off: while one expensive candidate is converting, scoring, and saving,
+        // newer AR frames are dropped rather than accumulating an unbounded queue.
+        captureQueue.async { [weak self] in
+            guard let self else { return }
+            defer { self.finishProcessing(runID: runID) }
+            self.process(frame, runID: runID)
+        }
+    }
+
+    private func process(_ frame: ARFrame, runID: UUID) {
+        let pose = frame.camera.transform
+        guard keyframeSelector.passesGeometricFilter(pose: pose, trackingState: frame.camera.trackingState) else {
+            return
+        }
+
+        let image = frame.capturedImage.toUIImage()
+        guard keyframeSelector.passesBlurFilter(image: image) else {
+            return
+        }
+
+        guard let jpegData = image.jpegData(compressionQuality: 0.9) else {
+            print("키프레임 JPEG 인코딩 실패")
+            return
+        }
+
+        let imageURL = storageDirectory.appendingPathComponent("frame-\(storedKeyframes.count).jpg")
+        do {
+            try jpegData.write(to: imageURL, options: .atomic)
+        } catch {
+            print("키프레임 저장 실패: \(error)")
+            return
+        }
+
+        // Persist first: failed encoding/writes must not advance filtering state or the published count.
+        keyframeSelector.commit(pose: pose)
+        let posedFrame = PosedFrame(
+            imagePath: imageURL,
+            pose: pose,
+            intrinsics: frame.camera.intrinsics,
+            timestamp: frame.timestamp
+        )
+        storedKeyframes.append(posedFrame)
+        let count = storedKeyframes.count
+        publishKeyframeCount(count, for: runID)
+        print("키프레임 #\(count) 저장: \(imageURL.path)")
+    }
+
+    private func finishProcessing(runID: UUID) {
+        intakeLock.lock()
+        if activeRunID == runID {
+            isProcessingFrame = false
+        }
+        intakeLock.unlock()
+    }
+
+    private func setAcceptsFrames(_ accepts: Bool) {
+        intakeLock.lock()
+        acceptsFrames = accepts
+        intakeLock.unlock()
+    }
+
+    private func synchronizeCaptureQueue<T>(_ work: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: Self.captureQueueKey) != nil {
+            return work()
+        }
+        return captureQueue.sync(execute: work)
+    }
+
+    private func beginPublishing(runID: UUID) {
+        let update = { [weak self] in
+            guard let self else { return }
+            self.publishedRunID = runID
+            self.keyframeCount = 0
+        }
+        if Thread.isMainThread {
+            update()
+        } else {
+            DispatchQueue.main.sync(execute: update)
+        }
+    }
+
+    private func publishKeyframeCount(_ count: Int, for runID: UUID) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.publishedRunID == runID else { return }
+            self.keyframeCount = count
         }
     }
 }
