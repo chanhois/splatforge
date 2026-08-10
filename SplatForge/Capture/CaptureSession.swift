@@ -3,7 +3,7 @@ import Combine
 
 /// Owns an AR capture run and streams accepted keyframes to JPEG files instead of retaining pixels in memory.
 nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate, @unchecked Sendable {
-    let session = ARSession()
+    @MainActor let session = ARSession()
     @MainActor @Published private(set) var keyframeCount = 0
 
     /// A snapshot is synchronized with the capture queue, so callers may safely read it after `stop()`.
@@ -28,7 +28,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
     // Access only on the main actor. It prevents an older run's queued UI update from winning.
     @MainActor private var publishedRunID: UUID?
 
-    override init() {
+    @MainActor override init() {
         storageDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("capture-\(UUID().uuidString)", isDirectory: true)
 
@@ -46,7 +46,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         captureQueue.setSpecific(key: captureQueueKey, value: ())
     }
 
-    func start() {
+    @MainActor func start() {
         session.pause()
         setAcceptsFrames(false)
 
@@ -69,7 +69,7 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
     }
 
     /// Pauses ARKit and waits for the one in-flight candidate, making `keyframes` stable on return.
-    func stop() {
+    @MainActor func stop() {
         session.pause()
         setAcceptsFrames(false)
         synchronizeCaptureQueue {}
@@ -162,19 +162,9 @@ nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDel
         return captureQueue.sync(execute: work)
     }
 
-    private func beginPublishing(runID: UUID) {
-        let update: @MainActor () -> Void = { [weak self] in
-            guard let self else { return }
-            self.publishedRunID = runID
-            self.keyframeCount = 0
-        }
-        if Thread.isMainThread {
-            MainActor.assumeIsolated(update)
-        } else {
-            DispatchQueue.main.sync {
-                MainActor.assumeIsolated(update)
-            }
-        }
+    @MainActor private func beginPublishing(runID: UUID) {
+        publishedRunID = runID
+        keyframeCount = 0
     }
 
     private func publishKeyframeCount(_ count: Int, for runID: UUID) {
