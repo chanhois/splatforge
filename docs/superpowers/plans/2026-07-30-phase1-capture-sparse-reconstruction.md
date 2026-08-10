@@ -943,7 +943,7 @@ git commit -m "Wire real-time keyframe filtering and disk streaming into Capture
 - Consumes: `CaptureSession`(Task 6)
 - Produces: `CaptureView` — 캡처가 끝나면 `onCaptureFinished: ([PosedFrame]) -> Void` 콜백으로 완료된 키프레임 배열을 넘긴다(Task 11에서 이 콜백을 재구성 파이프라인 실행에 연결).
 
-- [ ] **Step 1: ARContainerView를 ContentView.swift에서 CaptureView.swift로 이동**
+- [x] **Step 1: ARContainerView를 ContentView.swift에서 CaptureView.swift로 이동**
 
 `ARContainerView`는 Task 2 Step 3에서 `ContentView.swift`에 정의했다. 다음 Step 2에서 `ContentView.swift`를 완전히 새 내용으로 교체하면서 이 정의가 사라지므로, 여기서 먼저 `CaptureView.swift`로 옮겨준다 — **`ContentView.swift`에 있는 기존 `ARContainerView` 구조체 정의는 잘라내고(삭제)**, 아래처럼 `CaptureView.swift`에 붙여넣는다. (Step 2를 마치기 전까지 두 파일에 동시에 존재하면 "invalid redeclaration" 컴파일 에러가 나므로, 반드시 Step 1과 Step 2를 함께 끝낸 뒤에 빌드할 것.)
 
@@ -1009,7 +1009,7 @@ struct CaptureView: View {
 }
 ```
 
-- [ ] **Step 2: ContentView를 CaptureView 진입점으로 교체**
+- [x] **Step 2: ContentView를 CaptureView 진입점으로 교체**
 
 `SplatForge/ContentView.swift`:
 
@@ -1036,12 +1036,16 @@ Cmd+R. 물체 주위를 돌면서 카운터가 올라가는지, 50개 도달 시
 
 Expected: 화면에 실시간 카운터가 보이고, 종료 시 콘솔 로그가 찍힌다.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋** *(27b2e19, 정확한 50장 상한 보강 124dff4)*
 
 ```bash
 git add SplatForge/ContentView.swift SplatForge/Capture/CaptureView.swift
 git commit -m "Add capture UI with start/stop button and keyframe counter"
 ```
+
+> 구현 보강: SwiftUI의 비동기 카운터 관찰만으로는 50장 초과 저장을 막을 수 없으므로,
+> `CaptureSession`의 직렬 캡처 큐에서 실행별 상한을 적용하고 50번째 저장 직후 입력을 닫는다.
+> 기본 `start()` 호출은 기존처럼 무제한이며, `CaptureView`만 50장을 전달한다.
 
 ---
 
