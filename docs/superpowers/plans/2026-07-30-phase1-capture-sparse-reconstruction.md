@@ -1816,7 +1816,7 @@ Expected: 포인트 수가 0이 아니고(수백~수천 개 수준이면 정상)
 
 **비정상 — 부호 문제 의심**: 점들이 넓게 흩어져 있거나, 카메라 궤적 반대쪽에 있거나, 형태를 전혀 알아볼 수 없다면 Task 9에서 다룬 -Z 부호 보정이 실제 ARKit 데이터에서는 반대일 가능성이 있다. 이 경우 `ProjectionMath.swift`의 `projectionMatrixRowMajor`와 `project` 두 함수에서 Z 부호 반전(`-m.columns.*.z`, `camPoint4.z < 0`, `correctedZ = -camPoint4.z`)을 모두 반대로 바꿔서(즉 부호 반전을 제거하고) 다시 시도해본다. `TriangulationTests`(Task 9)의 합성 데이터 테스트는 이 프로젝트 내부적으로는 항상 일관되게 통과하므로(투영과 삼각측량이 같은 규약을 공유), 실제 ARKit 데이터에서만 드러나는 문제라는 점에 유의.
 
-- [x] **Step 6: 커밋** *(e2704a0)*
+- [x] **Step 6: 커밋** *(e2704a0, 통합 보강 0729cd7·6e7d0b9)*
 
 ```bash
 git add SplatForge/Reconstruction/ReconstructionViewModel.swift SplatForge/Result/ResultView.swift SplatForge/ContentView.swift
@@ -1825,8 +1825,13 @@ git commit -m "Wire capture-to-reconstruction-to-export end-to-end flow"
 
 > 자동 구현 보강: 재구성과 PLY 쓰기를 모두 detached 작업에서 수행하고, UUID 실행 토큰으로 이전
 > 작업이 최신 UI 상태를 덮지 못하게 한다. PLY 쓰기가 실제 성공한 뒤에만 공유 URL을 공개하며,
-> 실패는 별도 상태로 화면에 표시한다. ViewModel 집중 3/3, 전체 41/41 테스트와 시뮬레이터 앱 빌드는
+> 실패는 별도 상태로 화면에 표시한다. ViewModel 집중 3/3, 최종 전체 46/46 테스트와 시뮬레이터 앱 빌드는
 > 통과했다. Step 4~5의 실제 카메라 캡처/점군 시각 검증은 물리 기기에서 수행할 때까지 미완료다.
+
+> 최종 통합 리뷰 보강: 캡처마다 UUID 하위 디렉터리를 사용해 이전 pose가 가리키는 JPEG가 재촬영에
+> 의해 덮이지 않게 했고, 처리 중 결과 시트 dismiss를 막았다. 4장 미만 입력과 0포인트 결과는 성공
+> PLY로 공개하지 않는다. pair/PLY 작업은 협력 취소를 확인하며, 각 재구성 실행은 run UUID가 포함된
+> 전용 출력 파일을 소유하므로 늦게 끝난 이전 작업의 정리가 최신 공유 파일을 삭제할 수 없다.
 
 ---
 
