@@ -3,6 +3,24 @@ import UIKit
 @testable import SplatForge
 
 final class BlurFilterTests: XCTestCase {
+    // Catches matFromUIImage dereferencing a nil CGImage for CIImage-backed inputs.
+    func test_finiteCIImageBackedUIImageReturnsFiniteVariance() {
+        let ciImage = CIImage(color: CIColor(red: 1, green: 0, blue: 0, alpha: 1))
+            .cropped(to: CGRect(x: 0, y: 0, width: 16, height: 16))
+        let image = UIImage(ciImage: ciImage)
+
+        let variance = OpenCVWrapper.laplacianVariance(forImage: image)
+
+        XCTAssertTrue(variance.isFinite)
+    }
+
+    // Catches null dereferences and invalid OpenCV processing for images with no backing.
+    func test_imageWithNoCGImageOrCIImageBackingReturnsZero() {
+        let image = UIImage()
+
+        XCTAssertEqual(OpenCVWrapper.laplacianVariance(forImage: image), 0.0)
+    }
+
     func test_checkerboardHasHigherVarianceThanSolidColor() {
         let solid = Self.makeTestImage(checkerboard: false)
         let checker = Self.makeTestImage(checkerboard: true)
