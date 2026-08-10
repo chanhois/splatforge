@@ -1063,7 +1063,7 @@ git commit -m "Add capture UI with start/stop button and keyframe counter"
   - `+ (FeatureMatchResult *)matchFeaturesBetween:(UIImage *)image1 and:(UIImage *)image2;` → Swift: `OpenCVWrapper.matchFeatures(between:and:) -> FeatureMatchResult`
   - `points1[i]`와 `points2[i]`(둘 다 `NSValue(CGPoint)`)는 서로 매칭된 대응점 쌍이다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `SplatForgeTests/FeatureMatchingTests.swift`:
 
@@ -1110,11 +1110,11 @@ final class FeatureMatchingTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인**
+- [x] **Step 2: 테스트 실패 확인** *(RED — `OpenCVWrapper`에 `matchFeatures` API가 없어 exit 65)*
 
 Cmd+U. Expected: FAIL — `matchFeatures`가 없음.
 
-- [ ] **Step 3: OpenCVWrapper.h에 선언 추가**
+- [x] **Step 3: OpenCVWrapper.h에 선언 추가**
 
 `SplatForge/OpenCVWrapper.h`을 다음으로 교체:
 
@@ -1140,7 +1140,7 @@ NS_ASSUME_NONNULL_BEGIN
 NS_ASSUME_NONNULL_END
 ```
 
-- [ ] **Step 4: OpenCVWrapper.mm에 구현 추가**
+- [x] **Step 4: OpenCVWrapper.mm에 구현 추가**
 
 `SplatForge/OpenCVWrapper.mm`에 `@implementation OpenCVWrapper ... @end` 블록 안, 기존 메서드들 뒤에 추가하고 파일 맨 위에 `@implementation FeatureMatchResult @end`를 넣는다. 전체 파일:
 
@@ -1230,16 +1230,20 @@ static cv::Mat matFromUIImage(UIImage *image) {
 @end
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인** *(집중 3/3, 전체 16/16 PASS)*
 
 Cmd+U. Expected: PASS. (색깔 사각형 패턴이라 ORB가 모서리를 특징점으로 잘 잡아낸다 — 만약 매칭 수가 10개 미만으로 나오면 `rects` 배열에 사각형을 몇 개 더 추가해서 텍스처를 늘린다.)
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋** *(c9ef392)*
 
 ```bash
 git add SplatForge/OpenCVWrapper.h SplatForge/OpenCVWrapper.mm SplatForgeTests/FeatureMatchingTests.swift
 git commit -m "Add ORB feature detection and matching via OpenCV"
 ```
+
+> 구현 보강: Task 5의 안전한 이미지 변환을 유지하고 빈 `cv::Mat`/descriptor를 OpenCV 호출 전에
+> 차단한다. 대응점 배열은 모든 반환 경로에서 같은 길이를 보장한다. 원 계획의 반복 사각형 픽스처는
+> 배율과 모서리 모호성 때문에 결정적 1x 비대칭 텍스처로 교체하되 10±2px 이동 검증은 유지했다.
 
 ---
 
