@@ -4,7 +4,7 @@ import UIKit
 
 /// Decides whether a captured AR frame should be persisted as a keyframe.
 /// Call `commit(pose:)` only after the candidate image has been written successfully.
-final class KeyframeSelector {
+nonisolated final class KeyframeSelector {
     private let geometricFilter: GeometricKeyframeFilter
     private let blurVarianceThreshold: Double
     private let assumedObjectDistance: Float

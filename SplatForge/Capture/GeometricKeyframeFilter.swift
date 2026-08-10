@@ -4,7 +4,7 @@ import simd
 /// 물체 중심 기준으로 충분히 돌았는지(각도)를 판단한다.
 /// 절대 거리 대신 "물체까지 거리 대비 비율"로 baseline을 판단하는 이유:
 /// 물체가 가까우면 작은 이동도 큰 시차를 만들고, 멀면 그 반대이기 때문.
-struct GeometricKeyframeFilter {
+nonisolated struct GeometricKeyframeFilter {
     let minBaselineRatio: Float
     let minAngleDegrees: Float
 

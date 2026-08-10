@@ -2,16 +2,16 @@ import ARKit
 import Combine
 
 /// Owns an AR capture run and streams accepted keyframes to JPEG files instead of retaining pixels in memory.
-final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
+nonisolated final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate, @unchecked Sendable {
     let session = ARSession()
-    @Published private(set) var keyframeCount = 0
+    @MainActor @Published private(set) var keyframeCount = 0
 
     /// A snapshot is synchronized with the capture queue, so callers may safely read it after `stop()`.
     var keyframes: [PosedFrame] {
         synchronizeCaptureQueue { storedKeyframes }
     }
 
-    private static let captureQueueKey = DispatchSpecificKey<Void>()
+    private let captureQueueKey = DispatchSpecificKey<Void>()
     private let captureQueue = DispatchQueue(label: "com.splatforge.capture.processing")
     private let intakeLock = NSLock()
     private let keyframeSelector = KeyframeSelector()
@@ -25,8 +25,8 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
     private var isProcessingFrame = false
     private var activeRunID = UUID()
 
-    // Access only on the main thread. It prevents an older run's queued UI update from winning.
-    private var publishedRunID: UUID?
+    // Access only on the main actor. It prevents an older run's queued UI update from winning.
+    @MainActor private var publishedRunID: UUID?
 
     override init() {
         storageDirectory = FileManager.default.temporaryDirectory
@@ -43,7 +43,7 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
         }
 
         super.init()
-        captureQueue.setSpecific(key: Self.captureQueueKey, value: ())
+        captureQueue.setSpecific(key: captureQueueKey, value: ())
     }
 
     func start() {
@@ -58,7 +58,6 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
         let runID = UUID()
         intakeLock.lock()
         activeRunID = runID
-        isProcessingFrame = false
         acceptsFrames = true
         intakeLock.unlock()
         beginPublishing(runID: runID)
@@ -85,7 +84,6 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
         }
         isProcessingFrame = true
         runID = activeRunID
-        intakeLock.unlock()
 
         // This is a bounded hand-off: while one expensive candidate is converting, scoring, and saving,
         // newer AR frames are dropped rather than accumulating an unbounded queue.
@@ -94,9 +92,12 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
             defer { self.finishProcessing(runID: runID) }
             self.process(frame, runID: runID)
         }
+        // Enqueue before releasing the reservation so stop/start's subsequent queue sync cannot miss it.
+        intakeLock.unlock()
     }
 
     private func process(_ frame: ARFrame, runID: UUID) {
+        guard isActiveRun(runID) else { return }
         let pose = frame.camera.transform
         guard keyframeSelector.passesGeometricFilter(pose: pose, trackingState: frame.camera.trackingState) else {
             return
@@ -142,6 +143,12 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
         intakeLock.unlock()
     }
 
+    private func isActiveRun(_ runID: UUID) -> Bool {
+        intakeLock.lock()
+        defer { intakeLock.unlock() }
+        return activeRunID == runID
+    }
+
     private func setAcceptsFrames(_ accepts: Bool) {
         intakeLock.lock()
         acceptsFrames = accepts
@@ -149,27 +156,29 @@ final class CaptureSession: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     private func synchronizeCaptureQueue<T>(_ work: () -> T) -> T {
-        if DispatchQueue.getSpecific(key: Self.captureQueueKey) != nil {
+        if DispatchQueue.getSpecific(key: captureQueueKey) != nil {
             return work()
         }
         return captureQueue.sync(execute: work)
     }
 
     private func beginPublishing(runID: UUID) {
-        let update = { [weak self] in
+        let update: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
             self.publishedRunID = runID
             self.keyframeCount = 0
         }
         if Thread.isMainThread {
-            update()
+            MainActor.assumeIsolated(update)
         } else {
-            DispatchQueue.main.sync(execute: update)
+            DispatchQueue.main.sync {
+                MainActor.assumeIsolated(update)
+            }
         }
     }
 
     private func publishKeyframeCount(_ count: Int, for runID: UUID) {
-        DispatchQueue.main.async { [weak self] in
+        DispatchQueue.main.async { @MainActor [weak self] in
             guard let self, self.publishedRunID == runID else { return }
             self.keyframeCount = count
         }
