@@ -97,7 +97,7 @@ Xcode 실행 → File > New > Project > iOS > App. 설정값:
 
 생성 후 프로젝트 네비게이터에서 `SplatForge` 타겟 선택 → General 탭 → Minimum Deployments를 **17.0**으로 설정.
 
-- [ ] **Step 2: 개발자 계정 + 기기 등록** *(미완 — 개발자 모드 미설정. iPhone을 USB로 Mac에 최초 연결해야 설정 앱에 개발자 모드 항목이 나타난다)*
+- [ ] **Step 2: 개발자 계정 + 기기 등록** *(미완 — 2026-08-11 진단: iPhone 17은 Mac과 paired이지만 offline, Developer Mode disabled. 유효한 Apple Development 인증서와 자동 서명 팀은 있으나 Apple team에 등록된 device가 0대라 provisioning profile 생성이 차단됨. USB 연결·잠금 해제·신뢰 후 등록 및 개발자 모드 재시작 필요)*
 
 Xcode > Settings > Accounts에서 Apple ID로 로그인(없으면 추가). 무료 개인 계정으로도 기기 빌드 가능(단, 서명 인증서가 7일마다 만료돼서 재빌드 필요 — 계속 불편하면 Apple Developer Program($99/년) 고려).
 
@@ -149,7 +149,7 @@ struct ContentView: View {
 
 `SplatForge/SplatForgeApp.swift`는 Xcode가 이미 만들어준 기본 템플릿을 그대로 사용(`@main struct SplatForgeApp: App { var body: some Scene { WindowGroup { ContentView() } } }` 형태인지만 확인).
 
-- [ ] **Step 5: 실기기에서 빌드 및 확인** *(대기 중 — 개발자 모드 설정 후 진행. 시뮬레이터 빌드는 경고 0건으로 통과 확인함)*
+- [ ] **Step 5: 실기기에서 빌드 및 확인** *(대기 중 — 2026-08-11 `generic/platform=iOS` unsigned arm64 빌드와 OpenCV 링크는 통과. signed build는 등록 device/provisioning profile 부재로 중단됐으며, 개발자 모드 설정 후 설치·카메라 확인 필요)*
 
 iPhone을 USB로 연결(또는 같은 Wi-Fi에서 무선 연결 설정) → Xcode 상단에서 빌드 대상으로 본인 iPhone 선택 → Cmd+R로 실행. iPhone에서 "이 개발자를 신뢰하시겠습니까" 팝업이 뜨면 설정 > 일반 > VPN 및 기기 관리에서 신뢰 처리.
 
